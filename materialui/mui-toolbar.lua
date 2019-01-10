@@ -52,15 +52,15 @@ function M.newToolbarButton( options )
         y = options.y
     end
 
-    local barWidth = muiData.contentWidth
+    local barWidth = muiData.safeAreaWidth
     if options.width ~= nil then
-        barWidth = options.width
+        barWidth = options.width -- - (muiData.safeAreaInsets.leftInset + muiData.safeAreaInsets.rightInset)
     end
 
     if options.index ~= nil and options.index == 1 then
         local rectBak = display.newRect( 0, 0, barWidth, options.buttonHeight )
         rectBak:setFillColor( unpack( options.backgroundColor ) )
-        rectBak.x = options.x + barWidth * 0.5
+        rectBak.x = x + barWidth * 0.5
         rectBak.y = y
         muiData.widgetDict[options.basename]["toolbar"]["rectBak"] = rectBak
         --button["mygroup"]:insert( rectBak, true ) -- insert and center bkgd
@@ -77,6 +77,11 @@ function M.newToolbarButton( options )
     button["mygroup"].y = y
     button["touching"] = false
 
+    if options.parent ~= nil and false then
+        button["parent"] = options.parent
+        button["parent"]:insert( button["mygroup"] )
+    end
+
     -- label colors
     if options.labelColorOff == nil then
         options.labelColorOff = { 0, 0, 0 }
@@ -84,8 +89,10 @@ function M.newToolbarButton( options )
     if options.labelColor == nil then
         options.labelColor = { 1, 1, 1 }
     end
-    muiData.widgetDict[options.basename]["toolbar"]["labelColorOff"] = options.labelColorOff
-    muiData.widgetDict[options.basename]["toolbar"]["labelColor"] = options.labelColor
+    muiData.widgetDict[options.basename]["toolbar"][options.name]["labelColorOff"] = options.labelColorOff
+    muiData.widgetDict[options.basename]["toolbar"][options.name]["labelColor"] = options.labelColor
+    muiData.widgetDict[options.basename]["toolbar"][options.name]["iconColorOff"] = options.iconColorOff or options.labelColorOff
+    muiData.widgetDict[options.basename]["toolbar"][options.name]["iconColor"] = options.iconColor or options.labelColor
 
     local radius = options.height * 0.2
     if options.radius ~= nil and options.radius < options.height and options.radius > 1 then
@@ -103,9 +110,9 @@ function M.newToolbarButton( options )
         font = options.font
     end
 
-    local textColor = { 0, 0.82, 1 }
-    if options.textColor ~= nil then
-        textColor = options.textColor
+    local iconColor = { 0, 0.82, 1 }
+    if options.iconColor ~= nil then
+        iconColor = options.iconColor
     end
 
     local useBothIconAndText = false
@@ -134,6 +141,16 @@ function M.newToolbarButton( options )
         isChecked = options.isActive
     end
 
+    if options.isFontIcon == nil then
+        options.isFontIcon = false
+        -- backwards compatiblity
+        M.debug("font is "..font)
+        if M.isMaterialFont(font) == true then
+            options.isFontIcon = true
+            M.debug("isMaterialFont!")
+        end
+    end
+
     button["font"] = font
     button["fontSize"] = fontSize
     button["textMargin"] = textMargin
@@ -153,7 +170,7 @@ function M.newToolbarButton( options )
     end
 
     local buttonWidth = barWidth / numberOfButtons
-    local rectangle = display.newRect( buttonWidth / 2, 0, buttonWidth, options.buttonHeight )
+    local rectangle = display.newRect( (buttonWidth / 2), 0, buttonWidth, options.buttonHeight )
     rectangle:setFillColor( unpack(options.backgroundColor) )
     button["rectangle"] = rectangle
     button["rectangle"].value = options.value
@@ -163,7 +180,7 @@ function M.newToolbarButton( options )
     button["mygroup"]:insert( rectangle, true ) -- insert and center bkgd
 
     if options.index ~= nil and options.index == 1 and x < button["buttonWidth"] then
-        button["mygroup"].x = rectangle.contentWidth / 2
+        button["mygroup"].x = (rectangle.contentWidth / 2) + muiData.safeAreaInsets.leftInset
     elseif options.index ~= nil and options.index > 1 then
         button["buttonOffset"] = 0
     end
@@ -175,6 +192,16 @@ function M.newToolbarButton( options )
         textSize = fontSize * 0.9
     end
 
+    if options.isFontIcon == true then
+        tw = textSize
+        if M.isMaterialFont(font) == true then
+            options.text = M.getMaterialFontCodePointByName(options.text)
+        end
+    elseif string.len(options.text) < 2 then
+        tw = textSize
+    end
+
+    textSize = mathFloor(textSize)
     local options2 = 
     {
         --parent = textGroup,
@@ -182,18 +209,30 @@ function M.newToolbarButton( options )
         x = 0,
         y = textY,
         font = font,
+        width = textSize,
         fontSize = textSize,
         align = "center"
     }
 
-    button["myText"] = display.newText( options2 )
-    button["myText"]:setFillColor( unpack(textColor) )
+    if options.iconImage ~= nil then
+        button["myText"] = display.newImageRect( options.iconImage, textSize, textSize )
+        button["myText"].y = textY
+        button["myText"].isImage = true
+    else
+        button["myText"] = display.newText( options2 )
+        --button["myText"]:setFillColor( unpack(options.iconColor) )
+        button["myText"].isImage = false
+    end
     button["myText"].isVisible = true
     if isChecked then
-        button["myText"]:setFillColor( unpack(options.labelColor) )
+        if button["myText"].isImage == false then
+            button["myText"]:setFillColor( unpack(options.iconColor) )
+        end
         button["myText"].isChecked = isChecked
     else
-        button["myText"]:setFillColor( unpack(options.labelColorOff) )
+        if button["myText"].isImage == false then
+            button["myText"]:setFillColor( unpack(options.iconColorOff) )
+        end
         button["myText"].isChecked = false
     end
     button["mygroup"]:insert( button["myText"], false )
@@ -212,7 +251,7 @@ function M.newToolbarButton( options )
             align = "center"
         }
         button["myText2"] = display.newText( options3 )
-        button["myText2"]:setFillColor( unpack(textColor) )
+        button["myText2"]:setFillColor( unpack(options.labelColor) )
         button["myText2"].isVisible = true
         if isChecked then
             button["myText2"]:setFillColor( unpack(options.labelColor) )
@@ -226,12 +265,12 @@ function M.newToolbarButton( options )
 
     -- add the animated circle
 
-    local circleColor = textColor
+    local circleColor = iconColor
     if options.circleColor ~= nil then
         circleColor = options.circleColor
     end
 
-    button["myCircle"] = display.newCircle( options.height, options.height, maxWidth + M.getScaleVal(5) )
+    button["myCircle"] = display.newCircle( options.height, options.height, maxWidth + 5 )
     button["myCircle"]:setFillColor( unpack(circleColor) )
     button["myCircle"].isVisible = false
     button["myCircle"].x = 0
@@ -261,6 +300,10 @@ function M.getToolBarButtonProperty(widgetParentName, propertyName, index)
 
     if propertyName == "object" then
         data = muiData.widgetDict[widgetParentName]["toolbar"][widgetName]["mygroup"] -- x,y movement
+    elseif propertyName == "buttonHeight" then
+        data = muiData.widgetDict[widgetParentName]["toolbar"][widgetName]["buttonHeight"]
+    elseif propertyName == "buttonWidth" then
+        data = muiData.widgetDict[widgetParentName]["toolbar"][widgetName]["buttonWidth"]
     elseif propertyName == "layer_1" then
         data = muiData.widgetDict[widgetParentName]["toolbar"][widgetName]["rectangle"] -- button background
     elseif propertyName == "text" then
@@ -307,7 +350,7 @@ function M.toolBarButton (event)
         if M.isTouchPointOutOfRange( event ) then
             event.phase = "offTarget"
             -- event.target:dispatchEvent(event)
-            -- print("Its out of the button area")
+            -- M.debug("Its out of the button area")
         else
             event.phase = "onTarget"
             if muiData.interceptMoved == false then
@@ -321,6 +364,9 @@ function M.toolBarButton (event)
                 event.callBackData = options.callBackData
 
                 muiData.widgetDict[options.basename]["value"] = options.value
+                M.setEventParameter(event, "muiLabelColor", muiData.widgetDict[options.basename]["toolbar"][options.name]["labelColor"])
+                M.setEventParameter(event, "muiIconColor", muiData.widgetDict[options.basename]["toolbar"][options.name]["iconColor"])
+                M.setEventParameter(event, "muiTargetValue", options.value)
                 M.setEventParameter(event, "muiTargetValue", options.value)
                 M.setEventParameter(event, "muiTarget", muiData.widgetDict[options.basename]["toolbar"][options.name]["myText"])
                 M.setEventParameter(event, "muiTarget2", muiData.widgetDict[options.basename]["toolbar"][options.name]["myText2"])
@@ -332,6 +378,7 @@ function M.toolBarButton (event)
             muiData.touching = false
         end
     end
+    return true -- prevent propagation to other controls
 end
 
 function M.createToolbar( options )
@@ -352,13 +399,20 @@ function M.newToolbar( options )
         options.sliderColor = { 1, 1, 1 }
     end
 
+    x, y = M.getSafeXY(options, x, y)
+
     if options.list ~= nil then
         local count = #options.list
         muiData.widgetDict[options.name] = {}
         muiData.widgetDict[options.name]["toolbar"] = {}
         muiData.widgetDict[options.name]["type"] = "Toolbar"
-        for i, v in ipairs(options.list) do            
+        muiData.widgetDict[options.name]["layout"] = options.layout
+        if muiData.widgetDict[options.name]["layout"] == "horizontal" then
+            muiData.widgetDict[options.name]["y_position"] = y
+        end
+        for i, v in ipairs(options.list) do
             M.newToolbarButton({
+                parent = options.parent,
                 index = i,
                 name = options.name .. "_" .. i,
                 basename = options.name,
@@ -374,15 +428,18 @@ function M.newToolbar( options )
                 touchpoint = options.touchpoint,
                 isChecked = v.isChecked,
                 isActive = v.isActive,
-                font = "MaterialIcons-Regular.ttf",
+                isFontIcon = true,
+                font = muiData.materialFont,
                 labelText = v.labelText,
                 labelFont = options.labelFont,
                 labelFontSize = options.labelFontSize,
-                textColor = options.labelColor,
-                textColorOff = options.labelColorOff,
                 textAlign = "center",
                 labelColor = options.labelColor,
+                labelColorOff = options.labelColorOff,
+                iconColor = v.iconColor or options.labelColor,
+                iconColorOff = v.iconColorOff or options.labelColorOff,
                 backgroundColor = options.color or options.fillColor,
+                iconImage = v.iconImage,
                 numberOfButtons = count,
                 callBack = options.callBack,
                 callBackData = options.callBackData
@@ -402,7 +459,7 @@ function M.newToolbar( options )
 
         -- slider highlight
         local sliderHeight = options.buttonHeight * 0.05
-        muiData.widgetDict[options.name]["toolbar"]["slider"] = display.newRect( buttonOffset, muiData.contentHeight - (sliderHeight * 0.5), buttonWidth, sliderHeight )
+        muiData.widgetDict[options.name]["toolbar"]["slider"] = display.newRect( buttonOffset, muiData.safeAreaHeight - (sliderHeight * 0.5), buttonWidth, sliderHeight )
         muiData.widgetDict[options.name]["toolbar"]["slider"]:setFillColor( unpack( options.sliderColor ) )
         transition.to(muiData.widgetDict[options.name]["toolbar"]["slider"],{time=0, x=activeX, transition=easing.inOutCubic})
     end
@@ -437,19 +494,27 @@ function M.actionForToolbar( options, e )
         if target.isChecked == true then
             return
         end
+
         for k, v in pairs(list) do
             if v["myText"] ~= nil then
-                v["myText"]:setFillColor( unpack(muiData.widgetDict[basename]["toolbar"]["labelColorOff"]) )
+                if v["myText"].isImage == false then
+                    v["myText"]:setFillColor( unpack(v["iconColorOff"]) )
+                end
                 if v["myText2"] ~= nil then
-                    v["myText2"]:setFillColor( unpack(muiData.widgetDict[basename]["toolbar"]["labelColorOff"]) )
+                    v["myText2"]:setFillColor( unpack(v["labelColorOff"]) )
                 end
                 v["myText"].isChecked = false
             end
         end
 
-        target:setFillColor( unpack(muiData.widgetDict[basename]["toolbar"]["labelColor"]) )
+       local muiLabelColor = M.getEventParameter(e, "muiLabelColor")
+       local muiIconColor = M.getEventParameter(e, "muiIconColor")
+
+        if target.isImage == false then
+            target:setFillColor( unpack( muiIconColor ) )
+        end
         if target2 ~= nil then
-            target2:setFillColor( unpack(muiData.widgetDict[basename]["toolbar"]["labelColor"]) )
+            target2:setFillColor( unpack( muiLabelColor ) )
         end
         target.isChecked = true
         assert( options.callBack )(e)
@@ -464,11 +529,11 @@ function M.actionForToolbarDemo( event )
     local muiTarget = M.getEventParameter(event, "muiTarget")
     local muiTargetValue = M.getEventParameter(event, "muiTargetValue")
 
-    if muiTarget ~= nil then
-        print("Toolbar button text: " .. muiTarget.text)
+    if muiTarget ~= nil and muiTarget.text ~= nil then
+        M.debug("Toolbar button text: " .. muiTarget.text)
     end
     if muiTargetValue ~= nil then
-        print("Toolbar button value: " .. muiTargetValue)
+        M.debug("Toolbar button value: " .. muiTargetValue)
     end
 end
 

@@ -54,12 +54,14 @@ function M.newSlider(options)
         y = options.y
     end
 
+    x, y = M.getSafeXY(options, x, y)
+
     if options.width == nil then
-        options.width = M.getScaleVal(200)
+        options.width = 100
     end
 
     if options.height == nil then
-        options.height = M.getScaleVal(4)
+        options.height = 2
     end
 
     if options.position == nil then
@@ -67,7 +69,7 @@ function M.newSlider(options)
     end
 
     if options.radius == nil then
-        options.radius = M.getScaleVal(15)
+        options.radius = 8
     end
 
     if options.color == nil then
@@ -240,6 +242,8 @@ function M.sliderTouch (event)
         event.target.isFocus = false
         M.sliderPercentComplete(event, options)
     end
+    muiData.touched = true
+    return true -- prevent propagation to other controls
 end
 
 function M.sliderPercentComplete(event, options)
@@ -284,7 +288,7 @@ function M.sliderCallBackMove( event )
     local muiTargetValue = M.getEventParameter(event, "muiTargetValue")
 
     if event.target ~= nil then
-        print("sliderCallBackMove is: "..muiTargetValue)
+        M.debug("sliderCallBackMove is: "..muiTargetValue)
     end
 end
 
@@ -293,7 +297,7 @@ function M.sliderCallBack( event )
     local muiTargetValue = M.getEventParameter(event, "muiTargetValue")
 
     if muiTarget ~= nil then
-        print("percentComplete is: "..muiTargetValue)
+        M.debug("percentComplete is: "..muiTargetValue)
     end
 end
 

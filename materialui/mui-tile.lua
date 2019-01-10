@@ -58,12 +58,19 @@ function M.newTileGrid(options)
         y = options.y
     end
 
-    options.width = options.width or muiData.contentWidth
-    options.height = options.height or muiData.contentHeight
-    options.tileWidth = options.tileWidth or options.width * 0.5
-    options.tileHeight = options.tileHeight or options.width * 0.5
+    x, y = M.getSafeXY(options, x, y)
+    x = options.x
+
+    options.width = options.width or muiData.safeAreaWidth
+    options.height = options.height or muiData.safeAreaHeight
+    options.tileWidth = options.tileWidth or muiData.safeAreaWidth * 0.5
+    options.tileHeight = options.tileHeight or muiData.safeAreaHeight * 0.5
     options.textColor = options.textColor or {1, 1, 1, 1}
     options.fillColor = options.fillColor or {1, 1, 1, 1}
+
+    if options.fontIsScaled == nil then
+        options.fontIsScaled = true
+    end
 
     if options.backgroundColor ~= nil then
         options.fillColor = options.backgroundColor
@@ -71,7 +78,7 @@ function M.newTileGrid(options)
 
     -- place on scrollview???
     muiData.widgetDict[options.name] = {}
-    muiData.widgetDict[options.name]["rectbackdrop"] = display.newRect( muiData.contentWidth * 0.5, muiData.contentHeight * 0.5, muiData.contentWidth, muiData.contentHeight)
+    muiData.widgetDict[options.name]["rectbackdrop"] = display.newRect( muiData.contentWidth * 0.5, (muiData.contentHeight * 0.5) - muiData.safeAreaInsets.bottomInset, muiData.contentWidth, muiData.contentHeight)
     muiData.widgetDict[options.name]["rectbackdrop"].strokeWidth = 0
     muiData.widgetDict[options.name]["rectbackdrop"]:setFillColor( unpack( options.fillColor ) )
     muiData.widgetDict[options.name]["rectbackdrop"].isVisible = true
@@ -80,14 +87,15 @@ function M.newTileGrid(options)
     local scrollWidth = muiData.contentWidth * 0.5
     scrollView = widget.newScrollView(
         {
-            top = 0,
-            left = 0,
+            top = muiData.safeAreaInsets.topInset,
+            left = muiData.safeAreaInsets.leftInset,
             width = options.width,
-            height = muiData.contentHeight,
+            height = options.height,
             scrollWidth = scrollWidth,
-            scrollHeight = muiData.contentHeight,
+            scrollHeight = options.height,
             hideBackground = false,
             isBounceEnabled = false,
+            verticalScrollDisabled = false,
             backgroundColor = options.fillColor,
             listener = M.tileScrollListener
         }
@@ -95,6 +103,12 @@ function M.newTileGrid(options)
 
     scrollView.muiOptions = options
     muiData.widgetDict[options.name]["scrollview"] = scrollView
+
+    if options.parent ~= nil then
+        muiData.widgetDict[options.name]["parent"] = options.parent
+        muiData.widgetDict[options.name]["parent"]:insert( muiData.widgetDict[options.name]["rectbackdrop"] )
+        muiData.widgetDict[options.name]["parent"]:insert( muiData.widgetDict[options.name]["scrollview"] )
+    end
 
     -- now for the rest of the dialog
     local centerX = (muiData.contentWidth * 0.5)
@@ -137,11 +151,17 @@ function M.newTileGrid(options)
             textColor = options.textColor,
             labelText = v.labelText,
             align = v.align,
-            padding = v.padding,
+            padding = v.padding or 10,
             image = v.image,
+            fontIsScaled = v.fontIsScaled or options.fontIsScaled,
+            fontSize = options.fontSize or 18,
+            iconImage = v.iconImage,
             icon = v.icon,
+            isFontIcon = true,
             iconFont = options.iconFont,
+            iconFontSize = v.iconFontSize or options.fontSize,
             labelFont = options.labelFont,
+            labelFontSize = v.labelFontSize or options.fontSize,
     		tileFillColor = v.tileFillColor or options.tileFillColor,
     		highlightColor = v.tileHighlightColor or highlightColor,
     		highlightColorAlpha = v.tileHighlightColorAlpha or highlightColorAlpha,
@@ -170,7 +190,7 @@ function M.newTileGrid(options)
         circleColor = options.circleColor
     end
 
-    muiData.widgetDict[options.name]["myCircle"] = display.newCircle( options.height, options.height, maxWidth + M.getScaleVal(5) )
+    muiData.widgetDict[options.name]["myCircle"] = display.newCircle( options.height, options.height, maxWidth + 5 )
     muiData.widgetDict[options.name]["myCircle"]:setFillColor( unpack(circleColor) )
     muiData.widgetDict[options.name]["myCircle"].isVisible = false
     muiData.widgetDict[options.name]["myCircle"].x = 0
@@ -212,15 +232,16 @@ function M.newTile(options)
     end
     -- place the icon and text (could be an updatable widget?)
 
-    local fontSize = options.height
-    if options.fontSize ~= nil then
-        fontSize = options.fontSize
-    end
-    fontSize = mathFloor(tonumber(fontSize))
+    local fontSize = options.fontSize
+
+    iconFont = options.iconFont
+    iconFontSize = mathFloor(tonumber(options.iconFontSize or 18))
+
+    labelFont = options.labelFont
+    labelFontSize = mathFloor(tonumber(options.labelFontSize or 18))
 
     -- Calculate a font size that will best fit the given field's height
     local field = nil
-    local fontSize = 10
     local text = nil
     local boxTextCount = 0
     if options.labelText ~= nil then
@@ -233,15 +254,21 @@ function M.newTile(options)
     elseif options.iconFont ~= nil then
         font = options.iconFont
     end
+
     local field = {contentHeight=options.height * 0.60, contentWidth=options.height * 0.60}
     local textToMeasure = display.newText( text, 0, 0, font, fontSize )
-    local fontSize = fontSize * ( ( field.contentHeight ) / textToMeasure.contentHeight )
+    local newFontSize = fontSize * ( ( field.contentHeight ) / textToMeasure.contentHeight )
     local textWidth = textToMeasure.contentWidth
     textToMeasure:removeSelf()
     textToMeasure = nil
 
     local textY = 0
     local textSize = fontSize
+
+    if options.fontIsScaled == true then
+        textSize = newFontSize
+        M.debug("scale the font?")
+    end
 
     if options.icon ~= nil then boxTextCount = boxTextCount + 1 end
     if options.labelText ~= nil then boxTextCount = boxTextCount + 1 end
@@ -251,11 +278,11 @@ function M.newTile(options)
         iconOffset = 0.35
     end
 
-    if options.icon ~= nil then
+    if options.icon ~= nil and options.iconImage == nil then
         local options2 = 
         {
             --parent = textGroup,
-            text = options.icon,
+            text = M.getMaterialFontCodePointByName(options.icon),
             x = options.width * 0.5,
             y = options.height * iconOffset,
             width = options.width - options.padding,
@@ -266,6 +293,20 @@ function M.newTile(options)
         tile["icon"] = display.newText( options2 )
         tile["icon"]:setFillColor( unpack(options.textColor) )
         tile["mygroup"]:insert( tile["icon"] )
+    elseif options.iconImage ~= nil then
+        local x = options.width * 0.5
+        local y = options.height * iconOffset
+        tile["icon"] = display.newImageRect( options.iconImage, textSize, textSize )
+        tile["icon"].x = x
+        tile["icon"].y = y
+        tile["mygroup"]:insert( tile["icon"] )
+        if options.align == "left" then
+            tile["icon"].x = 0
+            tile["icon"].x = (tile["icon"].contentWidth * .5) + options.padding
+        elseif options.align == "right" then
+            tile["icon"].x = options.width
+            tile["icon"].x = options.width - ((tile["icon"].contentWidth * .5) + options.padding)
+        end
     end
 
     local textY = options.height * 0.5
@@ -282,7 +323,7 @@ function M.newTile(options)
             y = textY,
             width = options.width - options.padding,
             font = options.labelFont,
-            fontSize = fontSize * 0.35,
+            fontSize = textSize * 0.35,
             align = options.align or "center",
         }
         tile["text"] = display.newText( options3 )
@@ -366,7 +407,7 @@ function M.tileTouchEventHandler( event )
         if M.isTouchPointOutOfRange( event ) then
             event.phase = "offTarget"
             -- event.target:dispatchEvent(event)
-            -- print("Its out of the button area")
+            -- M.debug("Its out of the button area")
         else
             event.phase = "onTarget"
             if muiData.interceptMoved == false then
@@ -400,8 +441,11 @@ function M.tileHighlightAnimFinish( e )
 end
 
 function M.tileResetColor( e )
-    e:setFillColor( unpack(e.muiOptions.tileFillColor) )
-    e.alpha = 1
+    -- check if exist to avoid issue with scene destroy call
+    if e ~= nil and e.setFillColor ~= nil then
+        e:setFillColor( unpack(e.muiOptions.tileFillColor) )
+        e.alpha = 1
+    end
 end
 
 function M.tileCallBack( options, e )
@@ -417,8 +461,8 @@ function M.tileCallBack( options, e )
         }
         M.actionSwitchScene(e)
     end
-    if muiTargetValue ~= nil then
-        print("tile value: "..muiTargetValue)
+    if muiTargetValue ~= nil and muiData.widgetDict[options.basename] ~= nil then
+        M.debug("tile value: "..muiTargetValue)
         muiData.widgetDict[options.basename]["value"] = muiTargetValue
         local w = M.getTileButtonProperty("grid_demo", "layer_1", 1)
         if w ~= nil then
@@ -426,7 +470,7 @@ function M.tileCallBack( options, e )
         end
     end
     if muiTargetCallBackData ~= nil then
-        print("Item from callBackData: "..muiTargetCallBackData.item)
+        M.debug("Item from callBackData: "..muiTargetCallBackData.item)
     end
 end
 
@@ -442,15 +486,15 @@ function M.tileScrollListener( event )
     elseif ( phase == "moved" ) then
         M.updateUI(event)
     elseif ( phase == "ended" ) then
-        -- print( "Scroll view was released" )
+        -- M.debug( "Scroll view was released" )
     end
 
     -- In the event a scroll limit is reached...
     if ( event.limitReached ) then
-        if ( event.direction == "up" ) then print( "Reached bottom limit" )
-        elseif ( event.direction == "down" ) then print( "Reached top limit" )
-        elseif ( event.direction == "left" ) then print( "Reached right limit" )
-        elseif ( event.direction == "right" ) then print( "Reached left limit" )
+        if ( event.direction == "up" ) then M.debug( "Reached bottom limit" )
+        elseif ( event.direction == "down" ) then M.debug( "Reached top limit" )
+        elseif ( event.direction == "left" ) then M.debug( "Reached right limit" )
+        elseif ( event.direction == "right" ) then M.debug( "Reached left limit" )
         end
     end
 

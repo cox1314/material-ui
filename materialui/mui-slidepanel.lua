@@ -46,8 +46,11 @@ local M = muiData.M -- {} -- for module array/table
 function M.newSlidePanel(options)
 	if options == nil then return end
 
-    if muiData.widgetDict[options.name] ~= nil then
+    if muiData.widgetDict[options.name] ~= nil and muiData.slidePanelInUse == true then
         M.touchSlidePanelBarrier({target={muiOptions=options}})
+        return
+    elseif muiData.widgetDict[options.name] ~= nil and muiData.slidePanelInUse == false then
+        M.showSlidePanel(options.name)
         return
     end
 
@@ -62,11 +65,6 @@ function M.newSlidePanel(options)
 
     options.width = options.width or ( muiData.contentWidth * 0.5 )
 
-    muiData.dialogName = options.name
-    muiData.dialogInUse = true
-    muiData.slidePanelName = options.name
-    muiData.slidePanelInUse = true
-
     muiData.widgetDict[options.name] = {}
     muiData.widgetDict[options.name]["type"] = "SlidePanel"
     muiData.widgetDict[options.name]["options"] = options
@@ -74,15 +72,23 @@ function M.newSlidePanel(options)
     -- animate the menu button
     if options.buttonToAnimate ~= nil then
         local animateButton = M.getWidgetBaseObject(options.buttonToAnimate)
-        transition.to( animateButton, { rotation=90, time=300, transition=easing.inOutCubic } )
         muiData.widgetDict[options.name]["buttonToAnimate"] = animateButton
     end
 
     -- place on main display
-    muiData.widgetDict[options.name]["rectbackdrop"] = display.newRect( muiData.contentWidth * 0.5, muiData.contentHeight * 0.5, muiData.contentWidth, muiData.contentHeight)
+    muiData.widgetDict[options.name]["rectbackdrop"] = display.newRect(
+        display.screenOriginX + muiData.safeAreaInsets.leftInset, 
+        display.screenOriginY + muiData.safeAreaInsets.topInset, 
+        display.viewableContentWidth - ( muiData.safeAreaInsets.leftInset + muiData.safeAreaInsets.rightInset ), 
+        display.viewableContentHeight - ( muiData.safeAreaInsets.topInset + muiData.safeAreaInsets.bottomInset )
+    )
     muiData.widgetDict[options.name]["rectbackdrop"].strokeWidth = 0
     muiData.widgetDict[options.name]["rectbackdrop"]:setFillColor( unpack( {0.4, 0.4, 0.4, 0.3} ) )
     muiData.widgetDict[options.name]["rectbackdrop"].isVisible = true
+    muiData.widgetDict[options.name]["rectbackdrop"]:translate( 
+            muiData.widgetDict[options.name]["rectbackdrop"].contentWidth * .5,
+            muiData.widgetDict[options.name]["rectbackdrop"].contentHeight * .5
+    )
 
     muiData.widgetDict[options.name]["mygroup"] = display.newGroup()
     muiData.widgetDict[options.name]["mygroup"].x = 0
@@ -90,18 +96,33 @@ function M.newSlidePanel(options)
     muiData.widgetDict[options.name]["mygroup"].muiOptions = options
 
     -- put menu on a scrollview
+
+    -- get orientation of device
+    muiData.safeAreaOffsetMenu = 0
+    if muiData.safeAreaInsets.rightInset > 0 then
+        options.width = options.width + muiData.safeAreaInsets.rightInset
+        muiData.safeAreaOffsetMenu = muiData.safeAreaInsets.rightInset
+    elseif muiData.safeAreaInsets.leftInset > 0 then
+        options.width = options.width + muiData.safeAreaInsets.leftInset
+        muiData.safeAreaOffsetMenu = muiData.safeAreaInsets.leftInset
+    end
+
     local scrollWidth = muiData.contentWidth * 0.5
+    local topScrollView = muiData.safeAreaInsets.topInset
+    local heightScrollView = muiData.contentHeight - (muiData.safeAreaInsets.topInset + muiData.safeAreaInsets.bottomInset)
+
     scrollView = widget.newScrollView(
         {
-            top = 0,
+            top = topScrollView,
             left = -(options.width),
             width = options.width,
-            height = muiData.contentHeight,
+            height = heightScrollView,
             scrollWidth = scrollWidth,
-            scrollHeight = muiData.contentHeight,
+            scrollHeight = heightScrollView,
             hideBackground = false,
             isBounceEnabled = false,
             backgroundColor = options.fillColor,
+            horizontalScrollDisabled = true,
             listener = M.sliderScrollListener
         }
     )
@@ -110,14 +131,22 @@ function M.newSlidePanel(options)
     muiData.widgetDict[options.name]["scrollview"] = scrollView
 
     local rectclickWidth = muiData.contentWidth - options.width
-    muiData.widgetDict[options.name]["rectclick"] = display.newRect( 0, 0, rectclickWidth, muiData.contentHeight)
+    muiData.widgetDict[options.name]["rectclick"] = display.newRect(
+        display.screenOriginX + muiData.safeAreaInsets.leftInset, 
+        display.screenOriginY + muiData.safeAreaInsets.topInset, 
+        display.viewableContentWidth, 
+        display.viewableContentHeight - ( muiData.safeAreaInsets.topInset + muiData.safeAreaInsets.bottomInset )
+    )
+
+    -- display.newRect( display.cen, 0, rectclickWidth, muiData.contentHeight)
+    
     muiData.widgetDict[options.name]["rectclick"].strokeWidth = 0
     muiData.widgetDict[options.name]["rectclick"]:setFillColor( unpack( { 1, 1, 1, 0.01 } ) )
     muiData.widgetDict[options.name]["rectclick"].isVisible = true
     muiData.widgetDict[options.name]["rectclick"]:addEventListener( "touch", M.touchSlidePanelBarrier )
     muiData.widgetDict[options.name]["rectclick"].muiOptions = options
-    muiData.widgetDict[options.name]["rectclick"].x = options.width + (rectclickWidth * 0.5)
-    muiData.widgetDict[options.name]["rectclick"].y = muiData.contentHeight * 0.5
+    muiData.widgetDict[options.name]["rectclick"].x = (scrollView.x + scrollView.contentWidth) + (muiData.contentWidth - scrollView.contentWidth)
+    muiData.widgetDict[options.name]["rectclick"].y = (muiData.contentHeight * 0.5) - (muiData.safeAreaInsets.bottomInset * .5)
 
 
     -- put in title text and background if specified
@@ -135,6 +164,14 @@ function M.newSlidePanel(options)
         muiData.widgetDict[options.name]["scrollview"]:insert( muiData.widgetDict[options.name]["rect"] )
     end
 
+    -- place header image if present
+    if options.headerImage ~= nil then
+        muiData.widgetDict[options.name]["header_image"] = display.newImageRect( options.headerImage, muiData.widgetDict[options.name]["rect"].contentWidth, muiData.widgetDict[options.name]["rect"].contentHeight )
+        muiData.widgetDict[options.name]["scrollview"]:insert( muiData.widgetDict[options.name]["header_image"] )
+        muiData.widgetDict[options.name]["header_image"].x = muiData.widgetDict[options.name]["rect"].contentWidth * 0.5
+        muiData.widgetDict[options.name]["header_image"].y = muiData.widgetDict[options.name]["rect"].contentHeight * 0.5
+     end
+
     textOptions = {
         y = tw,
         x = ((options.width - tw) * 0.5),
@@ -143,12 +180,11 @@ function M.newSlidePanel(options)
         align = (options.titleAlign or "center"),
         width = options.width,
         font = (options.titleFont or native.systemFontBold),
-        fontSize = (options.titleFontSize or M.getScaleVal(30)),
+        fontSize = (options.titleFontSize or 15),
         fillColor = (options.titleFontColor or { 1, 1, 1, 1 }),
     }
     M.newText(textOptions)
     muiData.widgetDict[options.name]["scrollview"]:insert( M.getWidgetBaseObject(options.name .. "header-text") )
-
 
     -- add the buttons
 
@@ -169,24 +205,28 @@ function M.newSlidePanel(options)
                 width = options.width,
                 height = options.height,
                 buttonHeight = options.buttonHeight,
-                x = options.buttonHeight * 0.5,
+                x = (options.buttonHeight * 0.5),
                 y = y,
+                iconImage = v.iconImage,
                 touchpoint = options.touchpoint,
                 isChecked = v.isChecked,
                 isActive = v.isActive,
-                font = "MaterialIcons-Regular.ttf",
+                isFontIcon = true,
+                font = muiData.materialFont,
                 labelText = v.labelText,
                 labelFont = options.labelFont,
                 labelFontSize = options.labelFontSize,
                 textAlign = "center",
                 labelColor = options.labelColor,
                 labelColorOff = options.labelColorOff,
+                iconColor = v.iconColor or options.labelColor,
+                iconColorOff = v.iconColorOff or options.labelColorOff,
                 backgroundColor = options.fillColor,
                 buttonHighlightColor = options.buttonHighlightColor,
                 buttonHighlightColorAlpha = (options.buttonHighlightColorAlpha or 0.5),
                 numberOfButtons = count,
-                callBack = options.callBack,
-                callBackData = options.callBackData
+                callBack = v.callBack or options.callBack,
+                callBackData = v.callBackData or options.callBackData
             })
             else
                 M.newSlidePanelLineSeparator({
@@ -214,10 +254,26 @@ function M.newSlidePanel(options)
     end
 
     -- animate the menu for display
+    if options.isVisible == nil then options.isVisible = true end
+    if options.isVisible == true then
+        M.toFrontSafeArea()
+        muiData.dialogName = options.name
+        muiData.dialogInUse = true
+        muiData.slidePanelName = options.name
+        muiData.slidePanelInUse = true
+        muiData.slideBarrierTouched = false
+        transition.fadeIn(muiData.widgetDict[options.name]["rectclick"],{time=300})
+        transition.fadeIn(muiData.widgetDict[options.name]["rectbackdrop"],{time=300})
+        transition.to( muiData.widgetDict[options.name]["scrollview"], { time=300, x=(options.width * 0.5), transition=easing.linear } )
+        transition.to( animateButton, { rotation=90, time=300, transition=easing.inOutCubic } )
+    else
+        muiData.slidePanelName = options.name
+        muiData.widgetDict[options.name]["rectclick"].isVisible = false
+        muiData.widgetDict[options.name]["rectbackdrop"].isVisible = false
+        muiData.slideOut = false
+    end
+    muiData.widgetDict[options.name]["scrollview"].moved_object = false
 
-    transition.fadeIn(muiData.widgetDict[options.name]["rectclick"],{time=300})
-    transition.fadeIn(muiData.widgetDict[options.name]["rectbackdrop"],{time=300})
-    transition.to( muiData.widgetDict[options.name]["scrollview"], { time=300, x=(options.width * 0.5), transition=easing.linear } )
 end
 
 function M.getSlidePanelProperty(widgetName, propertyName)
@@ -254,7 +310,7 @@ function M.newSlidePanelLineSeparator( options )
     end
     barWidth = muiData.widgetDict[options.basename]["scrollview"].contentWidth
 
-    local lineSeparatorHeight = options.lineSeparatorHeight or M.getScaleVal(1)
+    local lineSeparatorHeight = options.lineSeparatorHeight or 1
 
     muiData.widgetDict[options.basename]["slidebar"][options.name] = {}
     muiData.widgetDict[options.basename]["slidebar"]["type"] = "slidebarLineSeparator"
@@ -268,7 +324,7 @@ function M.newSlidePanelLineSeparator( options )
         options.labelColorOff = { 0, 0, 0 }
     end
 
-    local lineSeparator = display.newRect( 0, 0, barWidth * 2, M.getScaleVal(lineSeparatorHeight) )
+    local lineSeparator = display.newRect( 0, 0, barWidth * 2, lineSeparatorHeight )
     lineSeparator:setFillColor( unpack(options.labelColorOff) )
     button["lineSeparator"] = lineSeparator
     button["buttonWidth"] = lineSeparator.contentWidth
@@ -309,8 +365,10 @@ function M.newSlidePanelButton( options )
     if options.labelColor == nil then
         options.labelColor = { 1, 1, 1 }
     end
-    muiData.widgetDict[options.basename]["slidebar"]["labelColorOff"] = options.labelColorOff
-    muiData.widgetDict[options.basename]["slidebar"]["labelColor"] = options.labelColor
+    muiData.widgetDict[options.basename]["slidebar"][options.name]["labelColorOff"] = options.labelColorOff
+    muiData.widgetDict[options.basename]["slidebar"][options.name]["labelColor"] = options.labelColor
+    muiData.widgetDict[options.basename]["slidebar"][options.name]["iconColorOff"] = options.iconColorOff
+    muiData.widgetDict[options.basename]["slidebar"][options.name]["iconColor"] = options.iconColor
 
     local fontSize = options.buttonHeight
     if options.fontSize ~= nil then
@@ -349,6 +407,15 @@ function M.newSlidePanelButton( options )
         isChecked = options.isActive
     end
 
+    if options.isFontIcon == nil then
+        options.isFontIcon = false
+        -- backwards compatiblity
+        if M.isMaterialFont(font) == true then
+            options.isFontIcon = true
+        end
+    end
+
+    button["options"] = options
     button["font"] = font
     button["fontSize"] = fontSize
     button["textMargin"] = textMargin
@@ -364,9 +431,12 @@ function M.newSlidePanelButton( options )
     textToMeasure = nil
 
     local buttonWidth = textWidth
+    textWidth = fontSize
     local buttonHeight = textHeight
+    -- local rectangle = display.newRect( buttonWidth * 0.5, 0, buttonWidth, buttonHeight )
     local rectangle = display.newRect( buttonWidth * 0.5, 0, buttonWidth, buttonHeight )
-    rectangle:setFillColor( unpack({1,1,1,0}) ) -- options.backgroundColor
+    options.backgroundColor = options.backgroundColor or { 1, 1, 1, 1 }
+    rectangle:setFillColor( unpack( options.backgroundColor ) )
     button["rectangle"] = rectangle
     button["rectangle"].value = options.value
     button["buttonWidth"] = rectangle.contentWidth
@@ -374,7 +444,7 @@ function M.newSlidePanelButton( options )
     button["buttonOffset"] = rectangle.contentHeight * 0.5
     button["mygroup"]:insert( rectangle, true ) -- insert and center bkgd
 
-    button["buttonOffset"] = options.buttonSpacing or M.getScaleVal(10)
+    button["buttonOffset"] = options.buttonSpacing or 5
 
     local textY = 0
     local textSize = fontSize
@@ -383,31 +453,46 @@ function M.newSlidePanelButton( options )
         textSize = fontSize * 0.9
     end
 
+    if options.isFontIcon == true then
+        tw = fontSize
+        if M.isMaterialFont(font) == true then
+            options.text = M.getMaterialFontCodePointByName(options.text)
+        end
+    elseif string.len(options.text) < 2 then
+        tw = fontSize
+    end
+
     local options2 =
     {
         --parent = textGroup,
         text = options.text,
-        x = 0,
+        x = muiData.safeAreaOffsetMenu,
         y = textY,
         font = font,
+        width = textSize * 1.5,
         fontSize = textSize,
-        align = "left"
+        align = "center"
     }
 
-    button["myButton"] = display.newRect( (options.width * 0.5) - textHeight * 0.5, textY, options.width, textHeight )
+    button["myButton"] = display.newRect( ((options.width * 0.5) - textHeight * 0.5) + muiData.safeAreaOffsetMenu, textY, options.width, textHeight )
     button["myButton"]:setFillColor( unpack( options.backgroundColor ) )
     button["mygroup"]:insert( button["myButton"] )
 
-    button["myText"] = display.newText( options2 )
-    button["myText"]:setFillColor( unpack(options.labelColorOff) )
-    button["myText"].isVisible = true
-    if isChecked then
-        button["myText"]:setFillColor( unpack(options.labelColor) )
-        button["myText"].isChecked = isChecked
+    if options.iconImage ~= nil then
+        button["myText"] = display.newImageRect( options.iconImage, textSize, textSize )
+        button["myText"].x = button["myText"].x + muiData.safeAreaOffsetMenu
     else
-        button["myText"]:setFillColor( unpack(options.labelColorOff) )
-        button["myText"].isChecked = false
+        button["myText"] = display.newText( options2 )
+        button["myText"].isVisible = true
+        if isChecked then
+            button["myText"]:setFillColor( unpack(options.iconColor) )
+            button["myText"].isChecked = isChecked
+        else
+            button["myText"]:setFillColor( unpack(options.iconColorOff) )
+            button["myText"].isChecked = false
+        end
     end
+    -- button["myText"].x = button["myText"].x + muiData.safeAreaOffsetMenu
     button["mygroup"]:insert( button["myText"], false )
 
     local maxWidth = field.contentWidth * 2.5
@@ -420,15 +505,11 @@ function M.newSlidePanelButton( options )
             text = options.labelText,
             x = 0,
             y = 0,
-            width = labelWidth,
             font = options.labelFont,
             fontSize = fontSize * 0.45,
-            align = "left"
         }
         button["myText2"] = display.newText( options3 )
-        button["myText2"]:setFillColor( unpack(textColor) )
-        button["myText2"].x = (labelWidth * 0.5) + button["rectangle"].contentWidth
-        button["myText2"].isVisible = true
+        button["myText2"].x = fontSize + (button["myText2"].contentWidth * 0.5) + muiData.safeAreaOffsetMenu
         if isChecked then
             button["myText2"]:setFillColor( unpack(options.labelColor) )
             button["myText2"].isChecked = isChecked
@@ -436,6 +517,7 @@ function M.newSlidePanelButton( options )
             button["myText2"]:setFillColor( unpack(options.labelColorOff) )
             button["myText2"].isChecked = false
         end
+        -- button["myText2"].x = button["myText2"].x + muiData.safeAreaOffsetMenu
         button["mygroup"]:insert( button["myText2"], false )
     end
 
@@ -496,16 +578,49 @@ function M.slidePanelEventButton (event)
         M.updateUI(event)
         if muiData.touching == false then
             muiData.touching = true
+            for name in pairs(muiData.widgetDict[options.basename]["slidebar"]) do
+                if muiData.widgetDict[options.basename]["slidebar"][name]["myButton"] ~= nil then
+                  local labelColorOff
+                  local opts = muiData.widgetDict[options.basename]["slidebar"][name]["options"]
+                  if opts ~= nil then
+                    labelColorOff = opts.iconColorOff or options.labelColorOff
+                  end
+
+                  muiData.widgetDict[options.basename]["slidebar"][name]["myButton"]:setFillColor( unpack(options.backgroundColor) )
+                  muiData.widgetDict[options.basename]["slidebar"][name]["myButton"].alpha = 0.01
+
+                  if opts.iconImage == nil then
+                      muiData.widgetDict[options.basename]["slidebar"][name]["myText"]:setFillColor( unpack(labelColorOff) )
+                  end
+                  muiData.widgetDict[options.basename]["slidebar"][name]["myText"].isChecked = false
+                  muiData.widgetDict[options.basename]["slidebar"][name]["myText2"]:setFillColor( unpack(labelColorOff) )
+                  muiData.widgetDict[options.basename]["slidebar"][name]["myText2"].isChecked = false
+                end
+            end
+            local labelColor
+            local opts = muiData.widgetDict[options.basename]["slidebar"][options.name]["options"]
+            if opts ~= nil then
+              labelColor = opts.iconColor or options.labelColor
+            end
             muiData.widgetDict[options.basename]["slidebar"][options.name]["myButton"]:setFillColor( unpack( options.buttonHighlightColor ) )
             muiData.widgetDict[options.basename]["slidebar"][options.name]["myButton"].alpha = options.buttonHighlightColorAlpha
+            if opts.iconImage == nil then
+               muiData.widgetDict[options.basename]["slidebar"][options.name]["myText"]:setFillColor( unpack(labelColor) )
+            end
+            muiData.widgetDict[options.basename]["slidebar"][options.name]["myText"].isChecked = isChecked
+            muiData.widgetDict[options.basename]["slidebar"][options.name]["myText2"]:setFillColor( unpack(labelColor) )
+            muiData.widgetDict[options.basename]["slidebar"][options.name]["myText2"].isChecked = isChecked
         end
-    elseif ( event.phase == "cancelled" or event.phase == "moved" ) then
-        M.sliderButtonResetColor( muiData.widgetDict[options.basename]["slidebar"][options.name]["myButton"] )
+    elseif event.phase == "cancelled" or event.phase == "moved" then
+        if muiData.widgetDict[options.basename]["slidebar"][options.name]["myButton"] ~= nil then
+            M.sliderButtonResetColor( muiData.widgetDict[options.basename]["slidebar"][options.name]["myButton"] )
+        end
+        muiData.touching = false
     elseif ( event.phase == "ended" ) then
         if M.isTouchPointOutOfRange( event ) then
             event.phase = "offTarget"
             -- event.target:dispatchEvent(event)
-            -- print("Its out of the button area")
+            -- M.debug("Its out of the button area")
         else
             event.phase = "onTarget"
             if muiData.interceptMoved == false then
@@ -541,8 +656,10 @@ function M.slidePanelEventButton (event)
 end
 
 function M.sliderButtonResetColor( e )
-    e:setFillColor( unpack(e.muiOptions.backgroundColor) )
-    e.alpha = 0.01
+    if e.target ~= nil then
+        e:setFillColor( unpack(e.muiOptions.backgroundColor) )
+        e.alpha = 0.01
+    end
 end
 
 function M.actionForSlidePanel( options, e )
@@ -551,11 +668,117 @@ function M.actionForSlidePanel( options, e )
     local muiTargetCallBackData = M.getEventParameter(e, "muiTargetCallBackData")
 
     if muiTargetValue ~= nil then
-        print("slide panel value: "..muiTargetValue)
+        M.debug("slide panel value: "..muiTargetValue)
     end
     if muiTargetCallBackData ~= nil then
-        print("Item from callBackData: "..muiTargetCallBackData.item)
+        M.debug("Item from callBackData: "..muiTargetCallBackData.item)
     end
+    if e.myTargetBasename ~= nil then
+        M.closeSlidePanel(e.myTargetBasename)
+    end
+end
+
+function M.showSlidePanel( widgetName, slideOut )
+
+    if widgetName ~= nil and muiData.widgetDict[widgetName] ~= nil then
+
+        if slideOut == nil then slideOut = false end
+
+        if muiData.slidePanelInUse == true then
+            M.hideSlidePanel( widgetName )
+            return
+        end
+        -- animate the menu button
+        if muiData.widgetDict[widgetName]["buttonToAnimate"] ~= nil then
+            transition.to( muiData.widgetDict[widgetName]["buttonToAnimate"], { rotation=90, time=300, transition=easing.inOutCubic } )
+        end
+        local options = muiData.widgetDict[widgetName]["mygroup"].muiOptions
+        if slideOut == false then
+            transition.to( muiData.widgetDict[widgetName]["scrollview"], { time=300, x=(options.width * 0.5), transition=easing.linear } )
+            transition.fadeIn(muiData.widgetDict[widgetName]["rectclick"],{time=300})
+            transition.fadeIn(muiData.widgetDict[widgetName]["rectbackdrop"],{time=300})
+            muiData.widgetDict[widgetName]["rectclick"].isVisible = true
+            muiData.widgetDict[widgetName]["rectbackdrop"].isVisible = true
+			muiData.widgetDict[widgetName]["scrollview"]:toFront()
+            M.toFrontSafeArea()
+        else
+            muiData.widgetDict[widgetName].isVisible = true
+			--muiData.widgetDict[widgetName]["scrollview"]:toFront()
+            --transition.fadeIn(muiData.widgetDict[widgetName]["rectclick"],{time=0})
+            --transition.fadeIn(muiData.widgetDict[widgetName]["rectbackdrop"],{time=0})
+        end
+        muiData.dialogName = widgetName
+        muiData.dialogInUse = true
+        muiData.slidePanelName = widgetName
+        muiData.slidePanelInUse = true
+        muiData.widgetDict[widgetName]["scrollview"].moved_object = false
+    end
+    muiData.slideBarrierTouched = false
+end
+
+function M.hideSlidePanel( widgetName )
+    if widgetName ~= nil and muiData.widgetDict[widgetName] ~= nil then
+        local options = muiData.widgetDict[widgetName]["mygroup"].muiOptions
+        transition.to( muiData.widgetDict[widgetName]["scrollview"], { time=300, x=-(options.width * 0.5), transition=easing.linear } )
+        transition.fadeOut(muiData.widgetDict[widgetName]["rectbackdrop"],{time=300})
+        transition.fadeOut(muiData.widgetDict[widgetName]["rectclick"],{time=300})
+        muiData.widgetDict[widgetName]["scrollview"].prevEventX = nil
+        muiData.widgetDict[widgetName]["scrollview"].origX = nil
+        muiData.dialogName = nil
+        muiData.dialogInUse = false
+        --muiData.slidePanelName = nil
+        muiData.slidePanelInUse = false
+        muiData.slideBarrierTouched = false
+        muiData.slideOut = false
+        -- animate the menu button
+        if muiData.widgetDict[widgetName]["buttonToAnimate"] ~= nil then
+            transition.to( muiData.widgetDict[widgetName]["buttonToAnimate"], { rotation=0, time=300, transition=easing.inOutCubic } )
+        end
+        -- reset button background colors
+        local parentOptions = muiData.widgetDict[widgetName].options
+        for k in pairs(muiData.widgetDict[widgetName]["slidebar"]) do
+            if k ~= "type" and muiData.widgetDict[widgetName]["slidebar"][k]["myButton"] ~= nil then
+                  muiData.widgetDict[widgetName]["slidebar"][k]["myButton"]:setFillColor( unpack(parentOptions.fillColor) )
+            end
+        end
+    end
+end
+
+function M.slidePanelOut(event)
+    if event == nil then return end
+
+    muiPriv = "muiPriv"
+    if muiData.widgetDict[muiPriv]["areaLeftInset"] ~= nil then
+        muiData.widgetDict[muiPriv]["areaLeftInset"]:toFront()
+    end
+    if muiData.widgetDict[muiPriv]["areaRightInset"] ~= nil then
+        muiData.widgetDict[muiPriv]["areaRightInset"]:toFront()
+    end
+
+    -- the or condition is to avoid a bug state of 'moved'
+    if (event.phase == "moved" and muiData.slideOut == false) then
+        local widgetName = muiData.slidePanelName
+        if widgetName ~= nil and muiData.widgetDict[widgetName]["scrollview"].x <= 0 and event.x < muiData.widgetDict[muiData.slidePanelName]["scrollview"].contentWidth * .25 then
+            M.showSlidePanel( widgetName, true )
+            muiData.slideOut = true
+        end
+    elseif muiData.slideOut == true then
+        M.sliderScrollListener(event)
+    end
+end
+
+function M.closeSlidePanel( widgetName )
+    if widgetName ~= nil and muiData.widgetDict[widgetName] ~= nil then
+        event = {}
+        event.target = muiData.widgetDict[widgetName]["scrollview"]
+        event.target.muiOptions = muiData.widgetDict[widgetName]["mygroup"].muiOptions
+        event.phase = "ended"
+        --M.touchSlidePanelBarrier( event )
+        if event.target.muiOptions ~= nil and event.target.muiOptions.name ~= nil then
+            M.hideSlidePanel( event.target.muiOptions.name )
+        end
+    end
+    return true
 end
 
 function M.touchSlidePanelBarrier( event )
@@ -564,28 +787,20 @@ function M.touchSlidePanelBarrier( event )
         options = event.target.muiOptions
     end
 
-    if ( event.phase == "began" ) then
-
-        muiData.widgetDict[options.name]["interceptEventHandler"] = M.touchSlidePanelBarrier
-        M.updateUI(event)
-        if muiData.touching == false then
-            muiData.touching = true
-        end
-    elseif ( event.phase == "ended" ) then
-        local width = muiData.widgetDict[options.name]["width"]
-
-        transition.fadeOut(muiData.widgetDict[options.name]["rectclick"],{time=200})
-        transition.fadeOut(muiData.widgetDict[options.name]["rectbackdrop"],{time=300})
-        muiData.widgetDict[options.name]["scrollview"].muiOptions = options
-        transition.to( muiData.widgetDict[options.name]["scrollview"], { time=300, x=-(options.width * 0.5), transition=easing.linear, onComplete=M.sliderPanelFinish } )
-        -- animate the menu button
-        if muiData.widgetDict[options.name]["buttonToAnimate"] ~= nil then
-            transition.to( muiData.widgetDict[options.name]["buttonToAnimate"], { rotation=0, time=300, transition=easing.inOutCubic } )
-        end
-        muiData.touching = false
-        muiData.interceptEventHandler = nil
-        muiData.widgetDict[options.name]["interceptEventHandler"] = nil
+    if event.phase == "moved" then
+        M.sliderScrollListener( event )
     end
+
+    if options ~= nil and options.name ~= nil and muiData.widgetDict[options.name]["scrollview"].moved_object == false then
+        M.hideSlidePanel( options.name )
+        muiData.slideBarrierTouched = true
+    elseif event.phase == "ended" then
+        -- finish scroll out if object was being moved out and ran over barrier
+        if muiData.widgetDict[options.name]["scrollview"].moved_object == true then
+            M.sliderScrollListener( event )
+        end
+    end
+    return true
 end
 
 function M.sliderPanelFinish( event )
@@ -597,28 +812,112 @@ end
 function M.sliderScrollListener( event )
 
     local phase = event.phase
+
     if event.phase == nil then return end
 
     M.updateEventHandler( event )
+    local name = muiData.slidePanelName
+
+    if muiData.widgetDict[name] == nil then return end
+    if muiData.widgetDict[name]["scrollview"] == nil then return end
+
+    if muiData.widgetDict[name]["move_horizontal"] == nil then
+        muiData.widgetDict[name]["move_horizontal"] = false
+        muiData.widgetDict[name]["move_vertical"] = false
+    end
+
+    muiData.widgetDict[name]["phase"] = phase
 
     if ( phase == "began" ) then
         -- skip it
     elseif ( phase == "moved" ) then
         M.updateUI(event)
-    elseif ( phase == "ended" ) then
-        -- print( "Scroll view was released" )
+        if muiData.widgetDict[name]["scrollview"].origX == nil then
+            muiData.widgetDict[name]["scrollview"].origX = muiData.widgetDict[name]["scrollview"].contentWidth * .5
+            muiData.widgetDict[name]["scrollview"].prevEventX = event.x
+            muiData.widgetDict[name]["scrollview"].prevEventY = event.y
+            if muiData.widgetDict[name]["scrollview"].x <= 0 then
+                muiData.widgetDict[name]["rectclick"].isVisible = true
+                muiData.widgetDict[name]["rectbackdrop"].isVisible = true
+                transition.fadeIn(muiData.widgetDict[name]["rectclick"],{time=0})
+                transition.fadeIn(muiData.widgetDict[name]["rectbackdrop"],{time=0})
+            end
+        end
+        if muiData.widgetDict[name]["scrollview"].prevEventX ~= nil then
+            if event.x < muiData.widgetDict[name]["scrollview"].prevEventX and muiData.widgetDict[name]["move_vertical"] == false then
+                muiData.widgetDict[name]["move_horizontal"] = true
+                local diff = muiData.widgetDict[name]["scrollview"].prevEventX - event.x
+                if math.abs(diff) > 2 then
+                    muiData.widgetDict[name]["scrollview"].x = muiData.widgetDict[name]["scrollview"].x - diff
+                    muiData.widgetDict[name]["scrollview"].prevEventX = event.x
+                    muiData.widgetDict[name]["scrollview"].muiMoved = true
+                    muiData.widgetDict[name]["scrollview"]:setIsLocked(true, "vertical")
+                end
+                muiData.widgetDict[name]["scrollview"].muiMove = "left"
+            elseif event.x > muiData.widgetDict[name]["scrollview"].prevEventX then
+                muiData.widgetDict[name]["move_horizontal"] = true
+                local diff = event.x - muiData.widgetDict[name]["scrollview"].prevEventX
+                if math.abs(diff) > 0 and (muiData.widgetDict[name]["scrollview"].x + diff) <= (muiData.widgetDict[name]["scrollview"].contentWidth * 0.5) then
+                    if (muiData.widgetDict[name]["scrollview"].x + diff) >= (muiData.widgetDict[name]["scrollview"].contentWidth) then
+                        muiData.widgetDict[name]["scrollview"].x = 0 -- muiData.widgetDict[name]["options"].width * .5
+                        diff = 0
+                    else
+                        muiData.widgetDict[name]["scrollview"].x = muiData.widgetDict[name]["scrollview"].x + diff
+                    end
+                    muiData.widgetDict[name]["scrollview"].prevEventX = event.x
+                    muiData.widgetDict[name]["scrollview"].muiMoved = true
+                    muiData.widgetDict[name]["scrollview"]:setIsLocked(true, "vertical")
+                end
+                muiData.widgetDict[name]["scrollview"].muiMove = "right"
+            elseif muiData.widgetDict[name]["move_horizontal"] == false and muiData.widgetDict[name]["scrollview"].prevEventY ~= event.y then
+                muiData.widgetDict[name]["move_vertical"] = true
+            end
+        end
+        muiData.widgetDict[name]["scrollview"].moved_object = true
+    elseif ( phase == "ended" or phase == "cancelled") then
+        muiData.widgetDict[name]["move_horizontal"] = false
+        muiData.widgetDict[name]["move_vertical"] = false
+        local hide = false
+        if muiData.widgetDict[name]["scrollview"].muiMoved ~= nil then
+            muiData.widgetDict[name]["scrollview"].muiMoved = nil
+            local newX = 0
+            local newXRight = 0
+            if muiData.widgetDict[name]["scrollview"].origX ~= nil then
+                newX = muiData.widgetDict[name]["scrollview"].origX + (muiData.widgetDict[name]["scrollview"].contentWidth * .3)
+                newXRight = muiData.widgetDict[name]["scrollview"].origX - (muiData.widgetDict[name]["scrollview"].contentWidth * .35)
+            end
+            if muiData.widgetDict[name]["scrollview"].muiMove == "left" and muiData.widgetDict[name]["scrollview"].origX ~= nil and (muiData.widgetDict[name]["scrollview"].x+(muiData.widgetDict[name]["scrollview"].contentWidth * 0.5)) <= newX and muiData.widgetDict[name]["scrollview"].moved_object then
+                M.hideSlidePanel(name)
+                hide = true
+            elseif muiData.widgetDict[name]["scrollview"].muiMove == "right" and muiData.widgetDict[name]["scrollview"].origX ~= nil and (muiData.widgetDict[name]["scrollview"].x + muiData.widgetDict[name]["scrollview"].contentWidth * .5) <= newXRight and muiData.widgetDict[name]["scrollview"].moved_object then
+                M.hideSlidePanel(name)
+                hide = true
+            end
+            muiData.widgetDict[name]["scrollview"]:setIsLocked(false, "vertical")
+            muiData.widgetDict[name]["scrollview"].prevEventX = nil
+            muiData.widgetDict[name]["scrollview"].prevEventY = nil
+            muiData.widgetDict[name]["scrollview"].origX = nil
+        elseif muiData.widgetDict[name]["scrollview"].origX == nil then
+            -- did not move, so hide it
+            M.hideSlidePanel(name)
+            hide = true
+        end
+        if hide == false then
+            transition.to( muiData.widgetDict[name]["scrollview"], { time=300, x=(muiData.widgetDict[name]["scrollview"].contentWidth * 0.5), transition=easing.linear } )
+        end
+        muiData.widgetDict[name]["scrollview"].moved_object = false
+        -- M.debug( "Scroll view was released" )
     end
 
     -- In the event a scroll limit is reached...
     if ( event.limitReached ) then
-        if ( event.direction == "up" ) then print( "Reached bottom limit" )
-        elseif ( event.direction == "down" ) then print( "Reached top limit" )
-        elseif ( event.direction == "left" ) then print( "Reached right limit" )
-        elseif ( event.direction == "right" ) then print( "Reached left limit" )
+        if ( event.direction == "up" ) then M.debug( "Reached bottom limit" )
+        elseif ( event.direction == "down" ) then M.debug( "Reached top limit" )
+        elseif ( event.direction == "left" ) then M.debug( "Reached right limit" )
+        elseif ( event.direction == "right" ) then M.debug( "Reached left limit" )
         end
     end
 
-    return true
 end
 
 
@@ -631,6 +930,10 @@ function M.removeSlidePanel(widgetName)
 
     -- remove the header if used
     if muiData.widgetDict[widgetName]["rect"] ~= nil then
+        if muiData.widgetDict[widgetName]["header_image"] ~= nil then
+            muiData.widgetDict[widgetName]["header_image"]:removeSelf()
+            muiData.widgetDict[widgetName]["header_image"] = nil
+        end
         muiData.widgetDict[widgetName]["rect"]:removeSelf()
         muiData.widgetDict[widgetName]["rect"] = nil
     end
@@ -647,6 +950,16 @@ function M.removeSlidePanel(widgetName)
         end
     end
 
+    if muiData.widgetDict[widgetName]["areaLeftInset"] ~= nil then
+        muiData.widgetDict[widgetName]["areaLeftInset"]:removeSelf()
+        muiData.widgetDict[widgetName]["areaLeftInset"] = nil
+    end
+
+    if muiData.widgetDict[widgetName]["areaRightInset"] ~= nil then
+        muiData.widgetDict[widgetName]["areaRightInset"]:removeSelf()
+        muiData.widgetDict[widgetName]["areaRightInset"] = nil
+    end
+
     muiData.widgetDict[widgetName]["rectclick"]:removeSelf()
     muiData.widgetDict[widgetName]["rectclick"] = nil
     muiData.widgetDict[widgetName]["scrollview"]:removeSelf()
@@ -661,6 +974,7 @@ function M.removeSlidePanel(widgetName)
     muiData.dialogInUse = false
     muiData.slidePanelName = nil
     muiData.slidePanelInUse = false
+    muiData.slideOut = false
 end
 
 function M.removeSlidePanelLineSeparator(widgetDict, slidePanelName, name)
@@ -703,6 +1017,10 @@ function M.removeSlidePanelButton(widgetDict, slidePanelName, name)
             if widgetDict[slidePanelName]["slidebar"][name]["myText2"] ~= nil then
                 widgetDict[slidePanelName]["slidebar"][name]["myText2"]:removeSelf()
                 widgetDict[slidePanelName]["slidebar"][name]["myText2"] = nil
+            end
+            if widgetDict[slidePanelName]["slidebar"][name]["myImage"] ~= nil then
+                widgetDict[slidePanelName]["slidebar"][name]["myImage"]:removeSelf()
+                widgetDict[slidePanelName]["slidebar"][name]["myImage"] = nil
             end
         else
             if widgetDict[slidePanelName]["slidebar"][name]["lineSeparator"] ~= nil then

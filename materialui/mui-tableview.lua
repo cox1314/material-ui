@@ -41,13 +41,13 @@ local mathMod = math.fmod
 local mathABS = math.abs
 
 local M = muiData.M -- {} -- for module array/table
+local MySceneName = nil
 
 function M.createTableView( options )
     M.newTableView( options )
 end
 
 function M.newTableView( options )
-    local screenRatio = M.getSizeRatio()
     -- The "onRowRender" function may go here (see example under "Inserting Rows", above)
 
     if options.noLines == nil then
@@ -66,6 +66,10 @@ function M.newTableView( options )
         options.font = native.systemFont
     end
 
+    if options.fontSize == nil then
+        options.fontSize = 18
+    end
+
     if options.strokeWidth == nil then
         options.strokeWidth = 0
     end
@@ -75,22 +79,28 @@ function M.newTableView( options )
     end
 
     if options.padding == nil then
-        options.padding = M.getScaleVal(15)
+        options.padding = 15
     end
 
     if options.rowAnimation == nil then
         options.rowAnimation = true
     end
 
-    muiData.tableCircle = display.newCircle( 0, 0, M.getScaleVal(20 * 2.5) )
-    muiData.tableCircle:setFillColor( unpack(options.circleColor) )
-    muiData.tableCircle.isVisible = false
-    muiData.tableCircle.alpha = 0.55
+    options.left, options.top = M.getSafeXY(options, options.left, options.top)
+
+    MySceneName = M.getCurrentScene()
+    muiData.sceneData[MySceneName].tableCircle = display.newCircle( 0, 0, (20 * 2.5) )
+    muiData.sceneData[MySceneName].tableCircle:setFillColor( unpack(options.circleColor) )
+    muiData.sceneData[MySceneName].tableCircle.isVisible = false
+    muiData.sceneData[MySceneName].tableCircle.alpha = 0.55
+    muiData.tableRow = nil
 
     -- Create the widget
     muiData.widgetDict[options.name] = {}
     muiData.widgetDict[options.name]["tableview"] = {}
     muiData.widgetDict[options.name]["type"] = "TableView"
+    muiData.widgetDict[options.name]["tableRow"] = nil
+    muiData.widgetDict[options.name]["options"] = options
 
     local tableView = widget.newTableView(
         {
@@ -103,6 +113,7 @@ function M.newTableView( options )
             onRowTouch = M.onRowTouch,
             listener = options.scrollListener,
             isLocked = options.isLocked or false,
+            hideBackground = options.hideBackground or false
         }
     )
     tableView.isVisible = false
@@ -110,7 +121,7 @@ function M.newTableView( options )
 
     if options.parent ~= nil then
         muiData.widgetDict[options.name]["parent"] = options.parent
-        muiData.widgetDict[options.name]["parent"]:insert( muiData.widgetDict[options.name]["tableView"] )
+        muiData.widgetDict[options.name]["parent"]:insert( tableView )
     end
 
     -- Insert the row data
@@ -124,7 +135,7 @@ function M.newTableView( options )
         -- use categories
         if v.isCategory ~= nil and v.isCategory == true then
             isCategory = true
-            rowHeight = M.getScaleVal(rowHeight + (rowHeight * 0.1))
+            rowHeight = (rowHeight + (rowHeight * 0.1))
             if options.categoryColor == nil then
                 options.categoryColor = { default={0.8,0.8,0.8,0.8} }
             end
@@ -138,10 +149,11 @@ function M.newTableView( options )
 
         -- Insert a row into the tableView
         if v.backgroundColor ~= nil then
-            v.fillColor = v.backgroundColor
+            v.fillColor = v.fillColor or v.backgroundColor
         else
-            v.fillColor = rowColor
+            v.fillColor = v.fillColor or rowColor.default
         end
+
         local optionList = {
             isCategory = isCategory,
             rowHeight = rowHeight,
@@ -151,14 +163,21 @@ function M.newTableView( options )
                 basename = options.name,
                 name = options.name,
                 text = v.text,
-                font = options.font,
+                font = v.font or options.font,
+                fontSize = v.fontSize or options.fontSize,
+                align = v.align or "left",
+                valign = v.valign or "middle",
                 value = v.value,
+                width = options.width,
+                columns = v.columns,
+                columnOptions = options.columnOptions,
                 padding = options.padding,
                 noLines = options.noLines,
-                lineHeight = options.lineHeight,
+                lineHeight = options.lineHeight or 0,
                 rowColor = v.fillColor,
                 textColor = options.textColor,
                 rowAnimation = options.rowAnimation,
+                backgroundImage = v.backgroundImage,
                 callBackData = options.callBackData,
                 callBackTouch = options.callBackTouch,
                 callBackRender = options.callBackRender
@@ -170,7 +189,6 @@ function M.newTableView( options )
         tableView:insertRow( optionList )
     end
     tableView.isVisible = true
-
 end
 
 function M.getTableViewProperty(widgetName, propertyName)
@@ -182,6 +200,8 @@ function M.getTableViewProperty(widgetName, propertyName)
         data = muiData.widgetDict[widgetName]["tableview"] -- x,y movement
     elseif propertyName == "value" then
         data = muiData.widgetDict[widgetName]["value"] -- value
+    elseif propertyName == "list" then
+        data = muiData.widgetDict[widgetName]["list"] -- rows and/or rows and columns
     end
     return data
 end
@@ -193,7 +213,7 @@ function M.onRowRender( event )
 
     -- need to use the colors passed in as params here.
     noLines = false
-    lineHeight = M.getScaleVal(4)
+    lineHeight = 1
     lineColor = { 0.9, 0.9, 0.9 }
     rowColor = { 1, 1, 1, 1 }
     textColor = { 0, 0, 0, 1 }
@@ -204,7 +224,6 @@ function M.onRowRender( event )
 
         if row.params.lineHeight ~= nil then
             lineHeight = row.params.lineHeight
-            if lineHeight == 1 then lineHeight = 2 end
         end
 
         if row.params.lineColor ~= nil then lineColor = row.params.lineColor end
@@ -218,19 +237,25 @@ function M.onRowRender( event )
     end
 
     if noLines == false and lineHeight > 0 then
-        -- line underneath label
-        row.bg1 = display.newRect( 0, 0, row.contentWidth, row.contentHeight - M.getScaleVal(1) )
-        row.bg1.anchorX = 0
-        row.bg1.anchorY = 0
-        row.bg1:setFillColor( unpack( lineColor ) ) -- transparent
-        row:insert( row.bg1 )
 
         -- the block above line
-        row.bg2 = display.newRect( 0, 0, row.contentWidth, row.contentHeight - M.getScaleVal(lineHeight) )
-        row.bg2.anchorX = 0
-        row.bg2.anchorY = 0
-        row.bg2:setFillColor( unpack( rowColor ) ) -- transparent
+        row.bg1 = display.newRect( 0, 0, row.contentWidth, row.contentHeight)
+        --row.bg1.anchorX = 0
+        --row.bg1.anchorY = 0
+        row.bg1.x = row.contentWidth * 0.5
+        row.bg1.y = row.contentHeight * 0.5
+        row.bg1:setFillColor( unpack( rowColor ) ) -- transparent
+        row:insert( row.bg1 )
+
+        -- line underneath label
+        row.bg2 = display.newRect( 0, 0, row.contentWidth, lineHeight)
+        -- row.bg2.anchorX = 0
+        -- row.bg1.anchorY = 0
+        row.bg2.x = row.contentWidth * 0.5
+        row.bg2.y = row.contentHeight - (lineHeight * 0.5)
+        row.bg2:setFillColor( unpack( lineColor ) ) -- transparent
         row:insert( row.bg2 )
+
     else
         row.bg1 = display.newRect( 0, 0, row.contentWidth, row.contentHeight)
         row.bg1.anchorX = 0
@@ -245,12 +270,16 @@ function M.onRowRender( event )
             row.miscEvent.name = row.params.name
             row.miscEvent.x = event.x
             row.miscEvent.y = event.y
-            row.miscEvent.minRadius = M.getScaleVal(60) * 0.25
+            row.miscEvent.minRadius = 30 * 0.25
         end
     end
     row:addEventListener( "touch", row )
 
     if row.params ~= nil and row.params.callBackRender ~= nil then
+        -- If a background image was specified then add it before any controls
+        M.attachBackgroundToRow(row, {
+            image = row.params.backgroundImage
+        })
         assert( row.params.callBackRender )(event)
     end
 end
@@ -263,15 +292,36 @@ function M.onRowRenderDemo( event )
     local rowHeight = row.contentHeight
     local rowWidth = row.contentWidth
 
+    --[[-- demo attaching checkbox to table (a checklist)
+    M.newCheckBox({
+        name = "check"..row.index,
+        text = "check_box_outline_blank",
+        width = 25,
+        height = 25,
+        isFontIcon = true,
+        font = M.materialFont,
+        textColor = { 0.3, 0.3, 0.3 },
+        textAlign = "center",
+        value = 500,
+        callBack = M.actionForCheckbox
+    })
+    M.attachToRow( row, {
+        widgetName = "check"..row.index,
+        widgetType = "IconButton",
+        align = "left",  -- left | right supported
+        params = row.params
+    })
+    --]]--
+
     --[[-- demo attaching widget to a row
     M.newIconButton({
         name = "plus"..row.index,
         text = "add_circle",
-        width = M.getScaleVal(40),
-        height = M.getScaleVal(40),
+        width = 25,
+        height = 25,
         x = 0,
         y = 0,
-        font = "MaterialIcons-Regular.ttf",
+        font = muiData.materialFont,
         textColor = { 1, 0, 0.4 },
         textAlign = "center",
         callBack = M.actionForButton
@@ -284,13 +334,135 @@ function M.onRowRenderDemo( event )
     })
     --]]--
 
-    local rowTitle = display.newText( row, row.params.text, 0, 0, font, M.getScaleVal(30) )
-    rowTitle:setFillColor( unpack( textColor ) )
+    local colWidth = 0
+    local x1 = 0
+    if row.params.columns ~= nil then
+        for i, v in ipairs(row.params.columns) do
 
-    -- Align the label left and vertically centered
-    rowTitle.anchorX = 0
-    rowTitle.x = 0
-    rowTitle.y = rowHeight * 0.5
+            colWidth = 0
+            if row.params.columnOptions ~= nil and row.params.columnOptions.widths ~= nil then
+                for j, k in ipairs(row.params.columnOptions.widths) do
+                    if j == i then
+                        colWidth = tonumber( k )
+                        colWidth = colWidth - 5
+                        break
+                    end
+                end
+            end
+            local container = display.newContainer( row, colWidth, rowHeight )
+            local textOptions =
+            {
+                parent = container,
+                text = v.text,
+                x = 0,
+                y = 0,
+                width = colWidth,
+                font = font,
+                fontSize = row.params.fontSize,
+                align = v.align or "left"  -- Alignment parameter
+            }
+            local rowTitle = display.newText( textOptions )
+            rowTitle:setFillColor( unpack( textColor ) )
+            -- Align the label left and vertically centered
+            --rowTitle.anchorX = 0
+            --rowTitle.x = 0
+            --rowTitle.y = rowHeight * 0.5
+            x1 = x1 + colWidth
+            if i < 2 then x1 = x1 * 0.5 end
+            container.x = x1
+            container.y = rowHeight * 0.5
+
+            v.valign = v.valign or "middle"
+
+            -- Pass in Font height too
+            if v.valign ~= nil then
+                M.setRowObjectVerticalAlign({
+                    obj = container,
+                    valign = v.valign,
+                    rowHeight = rowHeight,
+                    lineHeight = row.params.lineHeight,
+                    heightOfFont = rowTitle.contentHeight
+                })
+            end
+        end
+    else
+        local textOptions =
+        {
+            parent = row,
+            text = row.params.text,
+            x = 0,
+            y = rowHeight * 0.5,
+            width = rowWidth,
+            font = font,
+            fontSize = row.params.fontSize,
+            align = row.params.align or "left"  -- Alignment parameter
+        }
+        local rowTitle = display.newText( textOptions )
+        rowTitle:setFillColor( unpack( textColor ) )
+
+        -- Align the label left and vertically centered
+        rowTitle.anchorX = 0
+
+        row.params.valign = row.params.valign or "middle"
+        M.setRowObjectVerticalAlign({
+            obj = rowTitle,
+            valign = row.params.valign,
+            rowHeight = rowHeight,
+            lineHeight = row.params.lineHeight
+        })
+    end
+end
+
+function M.setRowObjectVerticalAlign(options)
+    obj = options.obj
+    objectHeight = options.obj.contentHeight
+    heightOffset = options.heightOfFont or 0
+    lineHeight = options.lineHeight or 0
+    valign = options.valign or "middle"
+    rowHeight = options.rowHeight
+
+    if heightOffset > 0 and valign == "bottom" then
+        heightDiff = mathABS(objectHeight - heightOffset)
+        objectHeight = objectHeight - heightDiff
+    elseif heightOffset > 0 and valign == "top" then
+        objectHeight = options.heightOfFont
+    end
+
+    if valign == "top" then
+        obj.y = objectHeight * 0.5
+    elseif valign == "middle" then
+        obj.y = (rowHeight / 2) - (lineHeight / 2)
+    elseif valign == "bottom" then
+        newY = rowHeight - (( objectHeight / 2) + (lineHeight))
+        obj.y = newY
+    else
+        M.debug("M.setRowObjectVerticalAlign : unsupported valign parameter: "..valign)
+    end
+end
+
+function M.attachBackgroundToRow(row, options)
+    if row == nil or options == nil or options.image == nil then return end
+
+    local rowHeight = row.contentHeight
+    local rowWidth = row.contentWidth
+    local name = "background-"..row.index
+
+    M.newImageRect({
+        image = options.image,
+        name = name,
+        width = rowWidth,
+        height = rowHeight,
+        x = 0,
+        y = 0
+    })
+    if muiData.widgetDict[name]["image_rect"] == nil then
+        M.debug("M.attachBackgroundToRow : cannot find image "..options.image)
+        return
+    end
+    local backImage = M.getWidgetBaseObject( name )
+    backImage.anchorX = 0
+    backImage.anchorY = 0
+    row:insert( backImage )
 end
 
 function M.attachToRow(row, options )
@@ -315,7 +487,7 @@ function M.attachToRow(row, options )
 
     if isTypeSupported == false then
         if options.widgetType == nil then options.widgetType = "unknown widget" end
-        print("Warning: attachToRow does not support type of "..options.widgetType)
+        M.debug("M.attachToRow : does not support type of "..options.widgetType)
         return
     end
 
@@ -327,8 +499,9 @@ function M.attachToRow(row, options )
     if muiData.widgetDict[basename]["list"][rowName] == nil then
         muiData.widgetDict[basename]["list"][rowName] = {}
         muiData.widgetDict[basename]["list"][rowName]["lastWidgetLeftX"] = 0
-        muiData.widgetDict[basename]["list"][rowName]["lastWidgetRightY"] = 0
+        muiData.widgetDict[basename]["list"][rowName]["lastWidgetRightX"] = 0
     end
+
     muiData.widgetDict[basename]["list"][rowName][widgetName] = options.widgetType
 
     if options.align == nil then
@@ -336,7 +509,7 @@ function M.attachToRow(row, options )
     end
 
     if options.padding == nil then
-        padding = M.getScaleVal(10)
+        padding = 10
     end
 
     if options.align == "left" then
@@ -345,7 +518,6 @@ function M.attachToRow(row, options )
         end
         newX = newX + muiData.widgetDict[basename]["list"][rowName]["lastWidgetLeftX"]
         widget.x = widget.contentWidth * 0.5 + newX
-        widget.y = widget.contentHeight * 0.5 + newY
         muiData.widgetDict[basename]["list"][rowName]["lastWidgetLeftX"] = widget.x + widget.contentWidth * 0.5
     else
         newX = nw
@@ -354,16 +526,35 @@ function M.attachToRow(row, options )
         end
         newX = newX - muiData.widgetDict[basename]["list"][rowName]["lastWidgetRightX"]
         widget.x = newX - widget.contentWidth * 0.5
-        widget.y = widget.contentHeight * 0.5 + newY
         muiData.widgetDict[basename]["list"][rowName]["lastWidgetRightX"] = padding + muiData.widgetDict[basename]["list"][rowName]["lastWidgetRightX"] + widget.contentWidth * 0.5
     end
+    widget.y = widget.contentHeight * 0.5 + newY
+
+    if options.valign ~= nil then
+        M.setRowObjectVerticalAlign({
+            rowHeight = row.contentHeight,
+            obj = widget,
+            valign = options.valign,
+            lineHeight = options.lineHeight or 0
+        })
+    end
+
     row:insert( widget, false )
+    if options.finish == true then
+        muiData.widgetDict[basename]["list"][rowName]["lastWidgetLeftX"] = 0
+        muiData.widgetDict[basename]["list"][rowName]["lastWidgetRightX"] = 0
+    end
 end
 
 function M.onRowTouch( event )
     local phase = event.phase
     local row = event.row
- 
+
+    if muiData.touched ~= nil and muiData.touched == true then
+            muiData.touched = false
+            return true
+    end
+
     if muiData.dialogInUse == true then
         if muiData.dialogName == nil then return end
         if string.find(row.params.name, muiData.dialogName) == nil then
@@ -371,12 +562,18 @@ function M.onRowTouch( event )
         end
     end
 
-    if "press" == phase and muiData.touching == false then
+    if (phase == "tap" or "press" == phase) and muiData.touching == false then
         muiData.touching = true
-        M.updateUI(event)
-        --print( "Touched row:", event.target.id )
-        --print( "Touched row:", event.target.index )
-    elseif "release" == phase then
+        local skipNameToRemove = nil
+        if string.find(string.lower(row.params.basename), "-list") then
+            skipNameToRemove = "__skipRemove"
+        end
+        M.updateUI(event, skipNameToRemove)
+        --M.debug( "Touched row:", event.target.id )
+        --M.debug( "Touched row:", event.target.index )
+    end
+
+    if ("release" == phase or "tap" == phase) then
         local row = event.row
 
         local rowAnimation = true
@@ -385,20 +582,24 @@ function M.onRowTouch( event )
         end
 
         if rowAnimation == true then
-            muiData.tableCircle:toFront()
+            MySceneName = M.getCurrentScene()
+            muiData.sceneData[MySceneName].tableCircle:toFront()
 
-            muiData.tableCircle.alpha = 0.55
+            muiData.sceneData[MySceneName].tableCircle.alpha = 0.55
             if row.miscEvent == nil then return end
-            muiData.tableCircle.x = row.miscEvent.x
-            muiData.tableCircle.y = row.miscEvent.y
+            muiData.sceneData[MySceneName].tableCircle.x = row.miscEvent.x
+            muiData.sceneData[MySceneName].tableCircle.y = row.miscEvent.y
             local scaleFactor = 0.1 --2.5
-            muiData.tableCircle.isVisible = true
-            muiData.tableCircle.myCircleTrans = transition.from( muiData.tableCircle, { time=300,alpha=0.2, xScale=scaleFactor, yScale=scaleFactor, transition=easing.inOutCirc, onComplete=M.subtleRadius } )
+            muiData.sceneData[MySceneName].tableCircle.isVisible = true
+            muiData.sceneData[MySceneName].tableCircle.myCircleTrans = transition.from( muiData.sceneData[MySceneName].tableCircle, { time=300,alpha=0.2, xScale=scaleFactor, yScale=scaleFactor, transition=easing.inOutCirc, onComplete=M.subtleRadius } )
             row.myGlowTrans = transition.to( row, { time=300,delay=150,alpha=0.4, transition=easing.outCirc, onComplete=M.subtleGlowRect } )
         end
 
+        M.setEventParameter(event, "basename", row.params.basename)
         M.setEventParameter(event, "muiTarget", row)
+        M.setEventParameter(event, "muiTargetRowParams", row.params)
         M.setEventParameter(event, "muiTargetIndex", event.target.index)
+        M.setEventParameter(event, "muiTableView", muiData.widgetDict[row.params.basename]["tableview"])
         if row.params ~= nil then
             M.setEventParameter(event, "muiTargetValue", row.params.value)
             muiData.widgetDict[row.params.name]["value"] = row.params.value
@@ -407,20 +608,138 @@ function M.onRowTouch( event )
             assert( row.params.callBackTouch )(event)
         end
     end
+    return true -- prevent propagation to other controls
+end
+
+function M.setLastRow( event, target )
+    local basename = M.getEventParameter(event, "basename")
+    if basename then
+        muiData.widgetDict[basename]["tableRow"] = target
+    end
+end
+
+function M.getLastRow( event )
+    local basename = M.getEventParameter(event, "basename")
+    if basename then
+        row = muiData.widgetDict[basename]["tableRow"]
+    end
+    return row
 end
 
 function M.onRowTouchDemo(event)
     local muiTarget = M.getEventParameter(event, "muiTarget")
     local muiTargetValue = M.getEventParameter(event, "muiTargetValue")
     local muiTargetIndex = M.getEventParameter(event, "muiTargetIndex")
+    local muiTargetRowParams = M.getEventParameter(event, "muiTargetRowParams")
+    local muiTableView = M.getEventParameter(event, "muiTableView")
 
-    if muiTargetIndex ~= nil then
-        print("row index: "..muiTargetIndex)
+    -- reset background color for all rows that are out of view.
+    -- set background of selected row
+
+    --[[-- uncomment below to demo row selected stays highlighted and prior rows do not.
+    local tableViewRows = nil
+    if muiTableView ~= nil then
+        tableViewRows = muiTableView._view._rows
     end
+    if muiTargetIndex ~= nil and tableViewRows ~= nil then
+        for k, row in ipairs(tableViewRows) do
+            if k == muiTargetIndex then
+                row.params.rowColor = { 0, 1, 0, 1 }
+            else
+                row.params.rowColor = { 1, 1, 1, 1 }
+            end
+        end
+        muiTableView:reloadData()
+    end
+    --]]--
 
     if muiTargetValue ~= nil then
-        print("row value: "..muiTargetValue)
+        M.debug("M.onRowTouchDemo : row value: "..muiTargetValue)
     end
+    -- access the columns of data
+    if muiTargetRowParams ~= nil and muiTargetRowParams.columns ~= nil then
+        M.debug("M.onRowTouchDemo : columns of data are:")
+        for i, v in ipairs(muiTargetRowParams.columns) do
+            M.debug("\tcolumn "..i.." text "..v.text)
+            M.debug("\tcolumn "..i.." value "..v.value)
+            M.debug("\tcolumn "..i.." align "..(v.align or "left"))
+        end
+    end
+
+end
+
+function M.insertRowsTableView(widgetName, list)
+    if widgetName == nil or rows == nil then return end
+    tableView = muiData.widgetDict[widgetName]["tableview"]
+    options = muiData.widgetDict[widgetName]["options"]
+    for i, v in ipairs(list) do
+
+        local isCategory = false
+        local rowHeight = options.rowHeight
+        local rowColor = options.rowColor
+        local lineColor = options.lineColor
+
+        -- use categories
+        if v.isCategory ~= nil and v.isCategory == true then
+            isCategory = true
+            rowHeight = (rowHeight + (rowHeight * 0.1))
+            if options.categoryColor == nil then
+                options.categoryColor = { default={0.8,0.8,0.8,0.8} }
+            end
+            if options.lineColor == nil then
+                options.categoryLineColor = { 1, 1, 1, 0 }
+            end
+
+            rowColor = options.categoryColor
+            lineColor = options.categoryLineColor
+        end
+
+        -- Insert a row into the tableView
+        if v.backgroundColor ~= nil then
+            v.fillColor = v.fillColor or v.backgroundColor
+        else
+            v.fillColor = v.fillColor or rowColor.default
+        end
+
+        local optionList = {
+            isCategory = isCategory,
+            rowHeight = rowHeight,
+            rowColor = rowColor,
+            lineColor = lineColor,
+            params = {
+                basename = options.name,
+                name = options.name,
+                text = v.text,
+                font = v.font or options.font,
+                fontSize = v.fontSize or options.fontSize,
+                align = v.align or "left",
+                valign = v.valign or "middle",
+                value = v.value,
+                width = options.width,
+                columns = v.columns,
+                columnOptions = options.columnOptions,
+                padding = options.padding,
+                noLines = options.noLines,
+                lineHeight = options.lineHeight or 0,
+                rowColor = v.fillColor,
+                textColor = options.textColor,
+                rowAnimation = options.rowAnimation,
+                backgroundImage = v.backgroundImage,
+                callBackData = options.callBackData,
+                callBackTouch = options.callBackTouch,
+                callBackRender = options.callBackRender
+            }
+        }
+        if v.key ~= nil then
+            optionList["id"] = v.key
+        end
+        tableView:insertRow( optionList )
+    end
+end
+
+function M.removeAllRowsFromTableView(widgetName)
+    if muiData.widgetDict[widgetName]["tableview"] == nil then return end
+    muiData.widgetDict[widgetName]["tableview"]:deleteAllRows()
 end
 
 function M.removeWidgetTableView(widgetName)

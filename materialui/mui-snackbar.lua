@@ -1,11 +1,11 @@
 --[[
     A loosely based Material UI module
 
-    mui-toast.lua : This is for creating "toast" notifications.
+    mui-snackbar.lua : This is for creating "snackbar" notifications.
 
     The MIT License (MIT)
 
-    Copyright (C) 2016 Anedix Technologies, Inc.  All Rights Reserved.
+    Copyright (C) 2017 Anedix Technologies, Inc.  All Rights Reserved.
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
@@ -32,6 +32,7 @@
 
 -- corona
 local widget = require( "widget" )
+local composer = require( "composer" )
 
 -- mui
 local muiData = require( "materialui.mui-data" )
@@ -42,7 +43,7 @@ local mathABS = math.abs
 
 local M = muiData.M -- {} -- for module array/table
 
-function M.removeToastNow( event )
+function M.removeSnackBarNow( event )
     local options = nil
     local params = event.source.params
 
@@ -55,43 +56,42 @@ function M.removeToastNow( event )
                 options.easingOut = 500
             end
             muiData.widgetDict[options.name]["container"].name = options.name
-            transition.to(muiData.widgetDict[options.name]["container"],{time=options.easingOut, y=-(options.top), transition=easing.inOutCubic, onComplete=M.removeMyToast})
-
             event.target = muiData.widgetDict[options.name]["rrect"]
             event.callBackData = options.callBackData
 
             M.setEventParameter(event, "muiTargetValue", options.value)
             M.setEventParameter(event, "muiTarget", muiData.widgetDict[options.name]["rrect"])
 
-            if options.callBack ~= nil then
+            if params.touched ~= nil and params.touched == true then
                 assert( options.callBack )(event)
             end
+            M.moveSnackBarParentView(options.name, "down")
         end
     end
 end
 
-function M.createToast( options )
-    M.newToast( options )
+function M.createSnackBar( options )
+    M.newSnackBar( options )
 end
 
-function M.newToast( options )
+function M.newSnackBar( options )
     if options == nil then return end
 
     if muiData.widgetDict[options.name] ~= nil then return end
 
     if options.width == nil then
-        options.width = 200
+        options.width = 100
     end
 
     if options.height == nil then
-        options.height = 4
+        options.height = 2
     end
 
     if options.radius == nil then
         options.radius = 15
     end
 
-    local left,top = (muiData.contentWidth-options.width) * 0.5, muiData.contentHeight * 0.5
+    local left,bottom = (muiData.contentWidth-options.width) * 0.5, muiData.contentHeight * 0.5
     if options.left ~= nil then
         left = options.left
     end
@@ -108,8 +108,8 @@ function M.newToast( options )
         options.font = native.systemFont
     end
 
-    if options.top == nil then
-        options.top = 80
+    if options.bottom == nil then
+        options.bottom = 80
     end
 
     if options.useTimeOut == nil then
@@ -121,12 +121,37 @@ function M.newToast( options )
     end
 
     muiData.widgetDict[options.name] = {}
-    muiData.widgetDict[options.name]["type"] = "Toast"
+    muiData.widgetDict[options.name]["type"] = "SnackBar"
     muiData.widgetDict[options.name]["removeInProgress"] = false
 
+    -- determine if there is a toolbar along the bottom, if so handle the offset of Y position
+    local yOffset = 0
+    local widgetType = nil
+    local widgetLayout = nil
+    for widget in pairs(muiData.widgetDict) do
+        widgetType = muiData.widgetDict[widget]["type"]
+        widgetLayout = muiData.widgetDict[widget]["layout"]
+        if widgetType ~= nil and widgetLayout ~= nil and widgetType == "Toolbar" and widgetLayout == "horizontal" then
+            yOffset = M.getToolBarButtonProperty(widget, "buttonHeight", 1)
+            local ty = muiData.widgetDict[widget]["y_position"]
+            if ty ~= nil then
+                local percent = (ty / muiData.contentHeight)
+                if percent <= 0.89 then
+                    yOffset = 0
+                end
+            end
+            local object = M.getToolBarProperty(widget, "object")
+            if object ~= nil then
+                -- todo: make toolbar grouped!
+            end
+            break
+        end
+    end
+
+    insetOffset = muiData.contentHeight - muiData.safeAreaHeight
     muiData.widgetDict[options.name]["container"] = widget.newScrollView(
         {
-            top = -options.height,
+            top = muiData.safeAreaHeight - yOffset,
             left = left,
             width = options.width + (options.width * 0.10),
             height = options.height + (options.height * 0.10),
@@ -137,6 +162,13 @@ function M.newToast( options )
             isLocked = true
         }
     )
+    muiData.widgetDict[options.name]["container"].isVisible = true
+
+    if options.parent ~= nil then
+        muiData.widgetDict[options.name]["parent"] = options.parent
+        muiData.widgetDict[options.name]["parent"]:insert( muiData.widgetDict[options.name]["container"] )
+        M.moveSnackBarParentView(options.name, "up")
+    end
 
     muiData.widgetDict[options.name]["touching"] = false
 
@@ -167,9 +199,35 @@ function M.newToast( options )
     muiData.widgetDict[options.name]["font"] = font
     muiData.widgetDict[options.name]["fontSize"] = fontSize
 
-    muiData.widgetDict[options.name]["myText"] = display.newText( options.text, newX, newY, font, fontSize )
+    local options_for_text = 
+    {
+        text = options.text,
+        x = 0,
+        y = newY,
+        font = font or native.systemFontBold,
+        fontSize = fontSize
+    }
+    muiData.widgetDict[options.name]["myText"] = display.newText( options_for_text )
+    local newTextX = (muiData.widgetDict[options.name]["myText"].contentWidth * 0.5) + 20
+    muiData.widgetDict[options.name]["myText"].x = newTextX
     muiData.widgetDict[options.name]["myText"]:setFillColor( unpack(options.textColor) )
     muiData.widgetDict[options.name]["container"]:insert( muiData.widgetDict[options.name]["myText"], true )
+
+    options.buttonText = options.buttonText or "UNDO"
+    options_for_text = 
+    {
+        text = options.buttonText,
+        x = 0,
+        y = newY,
+        font = buttonFont,
+        fontSize = fontSize
+    }
+    muiData.widgetDict[options.name]["myTextButton"] = display.newText( options_for_text )
+    local newTextX = mathABS(options.width - (muiData.widgetDict[options.name]["myTextButton"].contentWidth * 0.5))
+    muiData.widgetDict[options.name]["myTextButton"].x = newTextX
+    options.buttonTextColor = options.buttonTextColor or { 1, 0.23, 0.5, 1 }
+    muiData.widgetDict[options.name]["myTextButton"]:setFillColor( unpack(options.buttonTextColor) )
+    muiData.widgetDict[options.name]["container"]:insert( muiData.widgetDict[options.name]["myTextButton"], true )
 
     function rrect:touch (event)
         if muiData.dialogInUse == true and options.dialogName == nil then return end
@@ -192,7 +250,6 @@ function M.newToast( options )
             end
         elseif ( event.phase == "ended" ) then
             if muiData.widgetDict[options.name]["removeInProgress"] == true then return end
-            muiData.widgetDict[options.name]["removeInProgress"] = true
             if M.isTouchPointOutOfRange( event ) then
                   event.phase = "offTarget"
                   -- M.debug("Its out of the button area")
@@ -204,25 +261,20 @@ function M.newToast( options )
                         options.easingOut = 500
                     end
                     muiData.widgetDict[options.name]["container"].name = options.name
-                    transition.to(muiData.widgetDict[options.name]["container"],{time=options.easingOut, y=-(options.top), transition=easing.inOutCubic, onComplete=M.removeMyToast})
-                    event.target = muiData.widgetDict[options.name]["rrect"]
-                    event.callBackData = options.callBackData
-
-                    M.setEventParameter(event, "muiTargetValue", options.value)
-                    M.setEventParameter(event, "muiTarget", muiData.widgetDict[options.name]["rrect"])
-
-                    if options.callBack ~= nil then
-                        assert( options.callBack )(event)
-                    end
+                    event.source = {}
+                    event.source.params = { name = options.name, touched = true }
+                    M.removeSnackBarNow(event)
                 end
             end
             muiData.interceptEventHandler = nil
             muiData.interceptMoved = false
             muiData.touching = false
         end
-        return true -- prevent propagation to other controls
+        return true
     end
     muiData.widgetDict[options.name]["rrect"]:addEventListener( "touch", muiData.widgetDict[options.name]["rrect"] )
+
+    M.showInsetOverlay()
 
     if options.easingIn == nil then
         options.easingIn = 500
@@ -231,12 +283,27 @@ function M.newToast( options )
     muiData.widgetDict[options.name]["options"] = options
 
     if options.useTimeOut == true then
-        muiData.widgetDict[options.name]["removeTimer"] = timer.performWithDelay(options.timeOut + options.easingIn, M.removeToastNow, 1)
+        muiData.widgetDict[options.name]["removeTimer"] = timer.performWithDelay(options.timeOut + options.easingIn, M.removeSnackBarNow, 1)
         muiData.widgetDict[options.name]["removeTimer"].params = { name = options.name }
+    end
+
+end
+
+function M.moveSnackBarParentView(widgetName, position)
+    local newY = 0
+    if position == "up" then
+        newY = muiData.widgetDict[widgetName]["parent"].y - muiData.widgetDict[widgetName]["container"].contentHeight
+        newY = newY - (muiData.safeAreaInsets.bottomInset * 2)
+        transition.moveTo(muiData.widgetDict[widgetName]["parent"], {y=newY,time=500})
+    else
+        newY = muiData.widgetDict[widgetName]["parent"].y + muiData.widgetDict[widgetName]["container"].contentHeight
+        newY = newY + (muiData.safeAreaInsets.bottomInset * 2)
+        muiData.widgetDict[widgetName]["parent"].name = widgetName
+        transition.moveTo(muiData.widgetDict[widgetName]["parent"], {y=newY,time=500,onComplete=M.removeMySnackBar})
     end
 end
 
-function M.getToastProperty(widgetName, propertyName)
+function M.getSnackBarProperty(widgetName, propertyName)
     local data = nil
 
     if widgetName == nil or propertyName == nil then return data end
@@ -251,18 +318,19 @@ function M.getToastProperty(widgetName, propertyName)
     return data
 end
 
-function M.removeMyToast(event)
+function M.removeMySnackBar(event)
     local muiName = event.name
     if muiName ~= nil then
-        M.removeToast(muiName)
+        M.removeSnackBar(muiName)
+        M.hideInsetOverlay()
     end
 end
 
-function M.removeWidgetToast(widgetName)
-    M.removeToast(widgetName)
+function M.removeWidgetSnackBar(widgetName)
+    M.removeSnackBar(widgetName)
 end
 
-function M.removeToast(widgetName)
+function M.removeSnackBar(widgetName)
     if widgetName == nil then
         return
     end
@@ -276,6 +344,8 @@ function M.removeToast(widgetName)
     end
 
     muiData.widgetDict[widgetName]["rrect"]:removeEventListener("touch", muiData.widgetDict[widgetName]["sliderrect"])
+    muiData.widgetDict[widgetName]["myTextButton"]:removeSelf()
+    muiData.widgetDict[widgetName]["myTextButton"] = nil    
     muiData.widgetDict[widgetName]["myText"]:removeSelf()
     muiData.widgetDict[widgetName]["myText"] = nil
     muiData.widgetDict[widgetName]["rrect"]:removeSelf()

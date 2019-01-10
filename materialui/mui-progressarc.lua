@@ -57,6 +57,8 @@ function M.newProgressArc(options)
         y = options.y
     end
 
+    x, y = M.getSafeXY(options, x, y)
+
     if options.foregroundColor == nil then
         options.foregroundColor = { 0, 0, 1, 0, 1 }
     end
@@ -309,7 +311,7 @@ function M.increaseProgressArc( widgetName, percent, __forceprocess__ )
 end
 
 function M.repeatProgressArcCallBack( object )
-    -- print("repeatProgressArcCallBack")
+    -- M.debug("repeatProgressArcCallBack")
     if object.callBack ~= nil then
         assert(object.callBack)( object )
     end
@@ -335,7 +337,7 @@ function M.completeProgressArcFinalCallBack(object)
 end
 
 function M.postProgressArcCallBack( object )
-    print("postProgressCallBack")
+    M.debug("postProgressCallBack")
 end
 
 function M.removeWidgetProgressArc(widgetName)

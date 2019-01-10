@@ -63,7 +63,7 @@ function M.newDatePicker(options)
         muiData.widgetDict[options.name]["callBack"] = options.callBack
     end
 
-    if options.scrollView ~= nil and false then
+    if options.scrollView ~= nil then
         muiData.widgetDict[options.name]["scrollView"] = options.scrollView
         muiData.widgetDict[options.name]["scrollView"]:insert( muiData.widgetDict[options.name]["mygroup"] )
     end
@@ -81,8 +81,8 @@ function M.newDatePicker(options)
         options.toYear = 2019
     end
 
-    options.width = options.width or M.getScaleVal(600)
-    options.height = options.height or M.getScaleVal(400)
+    options.width = options.width or 600
+    options.height = options.height or 400
 
     local textToMeasure = display.newText( "September", 0, 0, options.font, options.fontSize )
     local width = textToMeasure.contentWidth
@@ -167,7 +167,7 @@ function M.newDatePicker(options)
         {
             align = "right",
             startIndex = options.startMonth,
-            width = M.getScaleVal(width),
+            width = width,
             labels = months,
             labelCount = 12,
             key = "months",
@@ -228,7 +228,7 @@ function M.datePickerCallBack( event )
         local value = M.pickerGetCurrentValue(muiName)
 
         local text = "Date Column 1 Value: " .. (value.month or "") .. "\nColumn 2 Value: " .. (value.day or "") .. "\nColumn 3 Value: " .. (value.year or "")
-        print("text: "..text)
+        M.debug("text: "..text)
     end
     M.removeDateTimePicker(event)
 
@@ -244,7 +244,7 @@ function M.pickerAddExtraRows(list, options)
     local widgetHeight = options.height
     local visible = (mathCeil(widgetHeight / rowHeight)) -- approx rows on screen
     local extraRows = mathCeil(visible * 0.5)
-    -- print("visible rows: "..(visible) .. " widgetHeight: "..widgetHeight.. " rowHeight: "..rowHeight)
+    -- M.debug("visible rows: "..(visible) .. " widgetHeight: "..widgetHeight.. " rowHeight: "..rowHeight)
     muiData.visibleRows = visible
     local i
     local maxnum = (options.start+extraRows)
@@ -301,8 +301,8 @@ function M.newTimePicker(options)
         useAMPM = false
     end
 
-    options.width = options.width or M.getScaleVal(600)
-    options.height = options.height or M.getScaleVal(400)
+    options.width = options.width or 300
+    options.height = options.height or 200
 
     -- Insert the row data
     local textToMeasure = display.newText( "X", 0, 0, options.font, options.fontSize )
@@ -447,11 +447,11 @@ end
 
 function M.pickerSetDefaultOptions(options)
     if options.font == nil then options.font = native.systemFont end
-    if options.fontSize == nil then options.fontSize = M.getScaleVal(24) end
+    if options.fontSize == nil then options.fontSize = 18 end
     if options.fontColor == nil then options.fontColor = { 0.7, 0.7, 0.7, 1 } end
     if options.fontColorSelected == nil then options.fontColorSelected = { 0, 0, 0, 1 } end
     if options.columnColor == nil then options.columnColor = { 1, 1, 1, 1 } end
-    if options.strokeWidth == nil then options.strokeWidth = M.getScaleVal(1) end
+    if options.strokeWidth == nil then options.strokeWidth = 1 end
     if options.strokeColor == nil then options.strokeColor = { 0, 0, 0, 1 } end
 
     return options
@@ -472,16 +472,31 @@ function M.newPickerWheel( x, y, options )
 
     local nW, nH
 
-    nW = options.width or M.getScaleVal(600)
-    nH = options.height or M.getScaleVal(400)
+    nW = options.width or 300
+    nH = options.height or 200
 
     muiData.widgetDict[options.name]["rect"] = display.newRect( 0, 0, nW, nH )
-    muiData.widgetDict[options.name]["rect"].strokeWidth = M.getScaleVal(options.strokeWidth)
+    muiData.widgetDict[options.name]["rect"].strokeWidth = options.strokeWidth
     muiData.widgetDict[options.name]["rect"]:setStrokeColor( unpack(options.strokeColor) )
     muiData.widgetDict[options.name]["mygroup"]:insert( muiData.widgetDict[options.name]["rect"] )
 
-    muiData.widgetDict[options.name]["mygroup"].x = display.contentCenterX
-    muiData.widgetDict[options.name]["mygroup"].y = display.contentCenterY
+    if options.ignoreInsets == nil then
+        options.ignoreInsets = false
+    end
+
+    local centerX, centerY
+    if options.ignoreInsets == false then
+        local offsetY = muiData.safeAreaInsets.topInset + muiData.safeAreaInsets.bottomInset
+        -- adjust picker
+        centerX = display.contentCenterX
+        centerY = display.contentCenterY - offsetY
+        -- adjust buttons
+        newX = newX - muiData.safeAreaInsets.leftInset
+        newY = newY - offsetY
+    end
+
+    muiData.widgetDict[options.name]["mygroup"].x = centerX
+    muiData.widgetDict[options.name]["mygroup"].y = centerY
 
     -- Insert the row data
     local textToMeasure = display.newText( "XX", 0, 0, options.font, options.fontSize )
@@ -612,11 +627,11 @@ function M.newPickerWheel( x, y, options )
     local ch = rect.contentHeight
 
     muiData.widgetDict[options.name]["line-top"] = display.newLine( -(rect.contentWidth * 0.5), -(rY), rect.contentWidth * 0.5, -(rY))
-    muiData.widgetDict[options.name]["line-top"].strokeWidth = M.getScaleVal(2)
+    muiData.widgetDict[options.name]["line-top"].strokeWidth = 2
     muiData.widgetDict[options.name]["line-top"]:setStrokeColor( unpack(options.strokeColor) )
     muiData.widgetDict[options.name]["mygroup"]:insert( muiData.widgetDict[options.name]["line-top"] )
     muiData.widgetDict[options.name]["line-bot"] = display.newLine( -(rect.contentWidth * 0.5), (rY), rect.contentWidth * 0.5, (rY))
-    muiData.widgetDict[options.name]["line-bot"].strokeWidth = M.getScaleVal(2)
+    muiData.widgetDict[options.name]["line-bot"].strokeWidth = 2
     muiData.widgetDict[options.name]["line-bot"]:setStrokeColor( unpack(options.strokeColor) )
     muiData.widgetDict[options.name]["mygroup"]:insert( muiData.widgetDict[options.name]["line-bot"] )
 
@@ -672,7 +687,7 @@ function M.newPickerWheel( x, y, options )
         dialogName = options.name,
         text = (options.cancelButtonText or "Cancel"),
         width = (cw * 0.5),
-        height = M.getScaleVal(50),
+        height = 35,
         x = newX,
         y = newY,
         font = native.systemFont,
@@ -686,7 +701,7 @@ function M.newPickerWheel( x, y, options )
         }
     })
     local cancelWidget = M.getWidgetBaseObject( options.name .. "-datetime-button-cancel" )
-    cancelWidget.x = (cancelWidget.x - ((cw - cancelWidget.contentWidth) * 0.5)) - (M.getScaleVal(options.strokeWidth) * 0.5)
+    cancelWidget.x = (cancelWidget.x - ((cw - cancelWidget.contentWidth) * 0.5)) - (options.strokeWidth * 0.5)
     cancelWidget.y = cancelWidget.y + ((ch - cancelWidget.contentHeight) * 0.5)
     cancelWidget.y = cancelWidget.y + (cancelWidget.contentHeight * 0.95)
 
@@ -696,7 +711,7 @@ function M.newPickerWheel( x, y, options )
         dialogName = options.name,
         text = (options.submitButtonText or "Set"),
         width = (cw * 0.5),
-        height = M.getScaleVal(50),
+        height = 35,
         x = newX,
         y = newY,
         font = native.systemFont,
@@ -711,7 +726,7 @@ function M.newPickerWheel( x, y, options )
     })
 
     local setWidget = M.getWidgetBaseObject( options.name .. "-datetime-button-set" )
-    setWidget.x = (setWidget.x + ((cw - setWidget.contentWidth) * 0.5)) + (M.getScaleVal(options.strokeWidth) * 0.5)
+    setWidget.x = (setWidget.x + ((cw - setWidget.contentWidth) * 0.5)) + (options.strokeWidth * 0.5)
     setWidget.y = setWidget.y + ((ch - setWidget.contentHeight) * 0.5)
     setWidget.y = setWidget.y + (setWidget.contentHeight * 0.95)
 end
@@ -918,7 +933,7 @@ function M.pickerOnRowRender( event )
         parent = row,
         --x = display.contentCenterX,
         --y = display.contentCenterY,
-        text = row.params.text,   
+        text = ""..row.params.text,
         font = native.systemFont,
         fontSize = row.params.fontSize,
         width = rowWidth,
@@ -985,10 +1000,10 @@ function M.pickerScrollListener( event )
 
     -- In the event a scroll limit is reached...
     if ( event.limitReached ) then
-        if ( event.direction == "up" ) then print( "Reached bottom limit" )
-        elseif ( event.direction == "down" ) then print( "Reached top limit" )
-        elseif ( event.direction == "left" ) then print( "Reached right limit" )
-        elseif ( event.direction == "right" ) then print( "Reached left limit" )
+        if ( event.direction == "up" ) then M.debug( "Reached bottom limit" )
+        elseif ( event.direction == "down" ) then M.debug( "Reached top limit" )
+        elseif ( event.direction == "left" ) then M.debug( "Reached right limit" )
+        elseif ( event.direction == "right" ) then M.debug( "Reached left limit" )
         end
     end
 
@@ -998,6 +1013,7 @@ function M.pickerScrollListener( event )
         -- muiData.moving = true
         -- muiData.moveTime = system.getTimer()
     end
+    return true
 end
 
 function M.pickerOnRowTouch( event )
@@ -1007,9 +1023,9 @@ function M.pickerOnRowTouch( event )
     local row = event.row
 
     if "press" == phase then
-        --print( "Touched row:", event.target.id )
-        --print( "Touched row:", event.target.index )
-        --print( "Touched row:", event.target.x )
+        --M.debug( "Touched row:", event.target.id )
+        --M.debug( "Touched row:", event.target.index )
+        --M.debug( "Touched row:", event.target.x )
     elseif "release" == phase or "cancelled" == phase then
         local row = event.row
     end
@@ -1026,7 +1042,7 @@ function M.timePickerCallBack( event )
         local value = M.pickerGetCurrentValue(muiName)
 
         local text = "Time Column 1 Value: " .. (value.hour or "") .. "\nColumn 2 Value: " .. (value.minute or "") .. "\nColumn 3 Value: " .. (value.ampm or "")
-        print("text: "..text)
+        M.debug("text: "..text)
 
     end
     M.removeDateTimePicker(event)

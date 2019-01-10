@@ -51,19 +51,23 @@ function M.createNavbar( options )
 end
 
 function M.newNavbar( options )
+    M.newNavBar(options)
+end
+
+function M.newNavBar( options )
     if options == nil then return end
 
     if muiData.widgetDict[options.name] ~= nil then return end
 
     if options.width == nil then
-        options.width = muiData.contentWidth
+        options.width = muiData.contentWidth - (muiData.safeAreaInsets.leftInset + muiData.safeAreaInsets.rightInset)
     end
 
     if options.height == nil then
-        options.height = M.getScaleVal(4)
+        options.height = 4
     end
 
-    local left,top = (muiData.contentWidth-options.width) * 0.5, muiData.contentHeight * 0.5
+    local left,top = (muiData.contentWidth-options.width) * 0.5, 0
     if options.left ~= nil then
         left = options.left
     end
@@ -73,19 +77,21 @@ function M.newNavbar( options )
     end
 
     if options.top == nil then
-        options.top = M.getScaleVal(80)
+        options.top = 80
     end
 
     if options.padding == nil then
-        options.padding = M.getScaleVal(10)
+        options.padding = 10
     end
 
     if options.top > muiData.contentHeight * 0.5 then
         muiData.navbarHeight = options.height
     end
 
+    left, top = M.getSafeXY(options, left, top)
+
     muiData.widgetDict[options.name] = {}
-    muiData.widgetDict[options.name]["type"] = "Navbar"
+    muiData.widgetDict[options.name]["type"] = "NavBar"
     muiData.widgetDict[options.name]["list"] = {}
     muiData.widgetDict[options.name]["lastWidgetLeftX"] = 0
     muiData.widgetDict[options.name]["lastWidgetRightX"] = 0
@@ -93,8 +99,8 @@ function M.newNavbar( options )
 
     muiData.widgetDict[options.name]["container"] = widget.newScrollView(
         {
-            top = options.top,
-            left = 0,
+            top = top,
+            left = left,
             width = options.width,
             height = options.height,
             scrollWidth = options.width,
@@ -104,6 +110,11 @@ function M.newNavbar( options )
             isLocked = true
         }
     )
+
+    if options.parent ~= nil then
+        muiData.widgetDict[options.name]["parent"] = options.parent
+        muiData.widgetDict[options.name]["parent"]:insert( muiData.widgetDict[options.name]["container"] )
+    end   
 
     local newX = muiData.widgetDict[options.name]["container"].contentWidth * 0.5
     local newY = muiData.widgetDict[options.name]["container"].contentHeight * 0.5
@@ -146,7 +157,7 @@ function M.attachToNavBar(navbar_name, options )
 
     if isTypeSupported == false then
         if options.widgetType == nil then options.widgetType = "unknown widget" end
-        print("Warning: attachToNavBar does not support type of "..options.widgetType)
+        M.debug("Warning: attachToNavBar does not support type of "..options.widgetType)
         return
     end
 
@@ -161,8 +172,10 @@ function M.attachToNavBar(navbar_name, options )
     muiData.widgetDict[navbar_name]["list"][widgetName] = options.widgetType
     if muiData.widgetDict[navbar_name]["destroy"] == nil then
         muiData.widgetDict[navbar_name]["destroy"] = {}
+        muiData.widgetDict[navbar_name]["destroy_object"] = {}
     end
     muiData.widgetDict[navbar_name]["destroy"][widgetName] = options.destroyCallBack
+    muiData.widgetDict[navbar_name]["destroy_object"][widgetName] = widget    
 
     if options.align == nil then
         options.align = "left"
@@ -194,6 +207,10 @@ function M.attachToNavBar(navbar_name, options )
 end
 
 function M.removeNavbar(widgetName)
+    M.removeNavBar(widgetName)
+end
+
+function M.removeNavBar(widgetName)
     if widgetName == nil then
         return
     end
@@ -219,7 +236,7 @@ function M.removeNavbar(widgetName)
                 M.removeTextField(name)
             elseif widgetType == "Generic" then
               if muiData.widgetDict[widgetName]["destroy"] ~= nil and muiData.widgetDict[widgetName]["destroy"][name] ~= nil then
-                assert( muiData.widgetDict[widgetName]["destroy"][name] )(event)
+                assert( muiData.widgetDict[widgetName]["destroy"][name] )( muiData.widgetDict[widgetName]["destroy_object"][name] )
               end
             end
         end

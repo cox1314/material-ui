@@ -12,7 +12,7 @@ settings =
 		-- portrait, portraitUpsideDown, landscapeLeft, landscapeRight
 
 		default = "landscapeRight",
-		supported = { "landscapeRight", }
+		supported = { "landscapeRight", "landscapeLeft", }
 	},
 	
 	excludeFiles =
@@ -29,7 +29,8 @@ settings =
 	{
 		plist =
 		{
-			coronaWindowMovesWhenKeyboardAppears = true,
+			UILaunchStoryboardName = "LaunchScreen",
+			CoronaWindowMovesWhenKeyboardAppears = true,
 			UIStatusBarHidden = false,
 			UIPrerenderedIcon = true, -- set to false for "shine" overlay
 			--UIApplicationExitsOnSuspend = true, -- uncomment to quit app on suspend
@@ -81,4 +82,27 @@ settings =
 		},
 		coronaWindowMovesWhenKeyboardAppears = true,
 	},
+	window =
+	{
+		minViewWidth = 960,
+		minViewHeight = 640
+	},
+	--[[
+	plugins =
+	{
+		["plugin.utf8"] =
+		{
+			publisherId = "com.coronalabs"
+		},
+	},
+	--]]
+	--[[
+    plugins =
+    {
+        ["plugin.nanosvg"] =
+        {
+            publisherId = "com.coronalabs"
+        },
+    },
+	--]]
 }

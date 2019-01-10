@@ -45,7 +45,7 @@ local M = muiData.M -- {} -- for module array/table
 --[[
   params:
     name = <name of widget>
-    radius = mui.getScaleVal(200),
+    radius = <val>,
     x = display.contentCenterX,
     y = display.contentCenterY,
     foregroundColor = { 0, 0.78, 1, 1 },
@@ -55,7 +55,7 @@ local M = muiData.M -- {} -- for module array/table
     iterations = 1,
     labelText = "20%",
     labelFont = native.systemFont,
-    labelFontSize = mui.getScaleVal(24),
+    labelFontSize = 18,
     labelColor = {  0.4, 0.4, 0.4, 1 },
     labelAlign = "center",
     labelStyle = "basic", -- "basic" or "embossed"
@@ -79,6 +79,8 @@ function M.newProgressCircle(options)
     if options.y ~= nil then
         y = options.y
     end
+
+    x, y = M.getSafeXY(options, x, y)
 
     if options.foregroundColor == nil then
         options.foregroundColor = { 0, 0, 1, 0, 1 }
@@ -301,14 +303,14 @@ function M.increaseProgressCircle( widgetName, percent, __forceprocess__ )
 end
 
 function M.repeatProgressCircleCallBack( object )
-    -- print("repeatProgressCircleCallBack")
+    -- M.debug("repeatProgressCircleCallBack")
     if object.callBack ~= nil then
         assert(object.callBack)( object )
     end
 end
 
 function M.completeProgressCircleCallBack( object )
-    -- print("completeProgressCircleCallBack")
+    -- M.debug("completeProgressCircleCallBack")
     if object.name == nil then return end
     if muiData.widgetDict[object.name] == nil then return end
 
@@ -344,7 +346,7 @@ function M.completeProgressCircleFinalCallBack(object)
 end
 
 function M.postProgressCircleCallBack( object )
-    print("postProgressCallBack")
+    M.debug("postProgressCallBack")
 end
 
 function M.removeWidgetProgressCircle(widgetName)

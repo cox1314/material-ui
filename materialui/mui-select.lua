@@ -56,6 +56,8 @@ function M.newSelect(options)
         y = options.y
     end
 
+    x, y = M.getSafeXY(options, x, y)
+
     if options.text == nil then
         options.text = ""
     end
@@ -95,11 +97,16 @@ function M.newSelect(options)
     end
 
     if options.strokeWidth == nil then
-        options.strokeWidth = M.getScaleVal(1)
+        options.strokeWidth = 1
     end
 
     if options.strokeColor == nil then
         options.strokeColor = { 0.4, 0.4, 0.4, 1 }
+    end
+
+    muiData.widgetDict[options.name].list = nil
+    if options.list ~= nil then
+        muiData.widgetDict[options.name].list = options.list
     end
 
     muiData.widgetDict[options.name]["rect"] = display.newRect( 0, 0, options.width, options.height )
@@ -108,7 +115,7 @@ function M.newSelect(options)
 
     local rect = muiData.widgetDict[options.name]["rect"]
     muiData.widgetDict[options.name]["line"] = display.newLine( -(rect.contentWidth * 0.9), rect.contentHeight / 2, (rect.contentWidth * 0.5), rect.contentHeight / 2)
-    muiData.widgetDict[options.name]["line"].strokeWidth = M.getScaleVal(4)
+    muiData.widgetDict[options.name]["line"].strokeWidth = 2
     muiData.widgetDict[options.name]["line"]:setStrokeColor( unpack(options.inactiveColor) )
     muiData.widgetDict[options.name]["container"]:insert( muiData.widgetDict[options.name]["line"] )
 
@@ -156,11 +163,11 @@ function M.newSelect(options)
     textOptions =
     {
         --parent = textGroup,
-        text = "keyboard_arrow_down",
+        text = M.getMaterialFontCodePointByName("keyboard_arrow_down"),
         x = 0,
         y = 0,
         width = options.width,
-        font = "MaterialIcons-Regular.ttf",
+        font = muiData.materialFont,
         fontSize = options.height * 0.55,
         align = "right"  --new alignment parameter
     }
@@ -200,12 +207,40 @@ function M.getSelectorProperty(widgetName, propertyName)
     return data
 end
 
+function M.setSelectorList(widgetName, list)
+    if widgetName == nil or list == nil then return end
+    if muiData.widgetDict[widgetName]["type"] == "Selector" then
+         muiData.widgetDict[widgetName].list = list
+         local text = ""
+         local value = ""
+         for k, v in pairs(list) do
+             text = v.text
+             value = v.value
+             break
+         end
+         M.setSelectorValue(widgetName, text, value)
+    end
+end
+
+function M.setSelectorValue(widgetName, text, value)
+    if widgetName == nil or text == nil or value == nil then return end
+    if muiData.widgetDict[widgetName]["type"] == "Selector" then
+         muiData.widgetDict[widgetName]["selectorfieldfake"].text = text
+         muiData.widgetDict[widgetName]["value"] = value
+    end
+end
+
 function M.revealTableViewForSelector(name, options)
     -- table view to hold pick list keyboard_arrow_down
     muiData.widgetDict[options.name]["mygroup"] = display.newGroup() -- options.width+4, options.height + options.listHeight)
 
+    M.setFocus( options.name, M.finishSelector )
+
     local x = options.x
     local y = options.y
+
+    x, y = M.getSafeXY(options, x, y)
+
     if muiData.widgetDict[options.name]["calculated"] ~= nil and muiData.widgetDict[options.name]["calculated"].y ~= nil then
         x = muiData.widgetDict[options.name]["calculated"].x
         y = muiData.widgetDict[options.name]["calculated"].y
@@ -216,11 +251,12 @@ function M.revealTableViewForSelector(name, options)
 
     M.newTableView({
         name = options.name.."-List",
-        width = options.width - M.getScaleVal(5),
+        width = options.width * .9,
         height = options.listHeight,
         font = options.font,
-        top = M.getScaleVal(40),
-        left = 0,
+        top = 25,
+        left = 10,
+        ignoreInsets = true,
         textColor = options.textColor,
         strokeColor = options.inactiveColor,
         strokeWidth = 1,
@@ -228,13 +264,14 @@ function M.revealTableViewForSelector(name, options)
         noLines = true,
         rowColor = options.rowColor,
         rowHeight = options.height,
+        rowBackgroundColor = options.rowBackgroundColor, -- default if backgroundColor not in list below
         callBackTouch = options.callBackTouch,
         callBackRender = M.onRowRenderSelect,
         scrollListener = options.listener,
         categoryColor = options.categoryColor,
         categoryLineColor = options.categoryLineColor,
         touchpointColor = options.touchpointColor,
-        list = options.list
+        list = muiData.widgetDict[options.name].list
     })
 
     muiData.widgetDict[options.name]["rect2"] = display.newRect( options.width * 0.5, (options.listHeight * 0.45) + options.height, options.width, options.listHeight + (options.height * 0.5))
@@ -260,12 +297,44 @@ function M.revealTableViewForSelector(name, options)
         else
             dy = muiData.widgetDict[options.name]["mygroup"].y - options.height
         end
+
         muiData.widgetDict[options.name]["mygroup"].y = dy
         muiData.widgetDict[options.name]["calculated"].x = muiData.widgetDict[options.name]["mygroup"].x
         muiData.widgetDict[options.name]["calculated"].y = muiData.widgetDict[options.name]["mygroup"].y
+
+        -- adjust position for scrollView if present
+        if false and muiData.widgetDict[options.name]["scrollView"] ~= nil then
+            local newX = muiData.widgetDict[options.name]["scrollView"].x - (muiData.widgetDict[options.name]["scrollView"].contentWidth * .5)
+            newX = (newX + muiData.widgetDict[options.name]["container"].x) - (muiData.widgetDict[options.name]["container"].contentWidth * .5)
+            muiData.widgetDict[options.name]["calculated"].x = newX
+            muiData.widgetDict[options.name]["mygroup"].x = muiData.widgetDict[options.name]["calculated"].x
+        end
     end
-    muiData.widgetDict[options.name]["mygroup"]:insert( muiData.widgetDict[options.name.."-List"]["tableview"] )
-    muiData.widgetDict[options.name]["mygroup"].isVisible = false
+
+    -- adjust position for scrollView if present
+    if muiData.widgetDict[options.name]["scrollView"] ~= nil then
+        local scroller = muiData.widgetDict[options.name]["scrollView"]
+        local xView, yView = scroller:getContentPosition()
+        local scroll_height = muiData.widgetDict[options.name]["scrollView"].contentHeight
+        local table_height = muiData.widgetDict[options.name.."-List"]["tableview"].contentHeight
+        local widget_y = muiData.widgetDict[options.name]["mygroup"].y
+        local widget_height = muiData.widgetDict[options.name]["mygroup"].contentHeight
+        local sY = (yView)
+
+        if sY == 0 then
+            if table_height < (widget_y + widget_height) then
+                local newY = (widget_y + widget_height) - table_height
+                newY = muiData.widgetDict[options.name]["mygroup"].y - ( widget_height - options.height )
+                muiData.widgetDict[options.name]["mygroup"].y = newY
+            end
+        end
+    end
+
+    muiData.widgetDict[options.name]["mygroup"]:insert( muiData.widgetDict[options.name.."-List"]["tableview"], false )
+    muiData.widgetDict[options.name]["mygroup"].isVisible = true -- false
+    if muiData.widgetDict[options.name]["scrollView"] ~= nil then
+        muiData.widgetDict[options.name]["scrollView"]:insert( muiData.widgetDict[options.name]["mygroup"] )
+    end
 end
 
 function M.selectorListener( event )
@@ -275,6 +344,7 @@ function M.selectorListener( event )
         M.revealTableViewForSelector(name, muiData.widgetDict[name]["options"])
         muiData.widgetDict[name]["mygroup"].isVisible = true
     end
+    return true -- prevent propagation to other controls
 end
 
 function M.onRowRenderSelect( event )
@@ -285,7 +355,7 @@ function M.onRowRenderSelect( event )
     local rowHeight = row.contentHeight
     local rowWidth = row.contentWidth
 
-    local rowTitle = display.newText( row, row.params.text, 0, 0, font, M.getScaleVal(30) )
+    local rowTitle = display.newText( row, row.params.text, 0, 0, font, 18 )
     rowTitle:setFillColor( unpack( textColor ) )
 
     -- Align the label left and vertically centered
@@ -300,20 +370,30 @@ function M.onRowTouchSelector(event)
     local muiTargetIndex = M.getEventParameter(event, "muiTargetIndex")
 
     if muiTargetIndex ~= nil then
-        print("row index: "..muiTargetIndex)
+        M.debug("row index: "..muiTargetIndex)
     end
 
     if muiTargetValue ~= nil then
-        print("row value: "..muiTargetValue)
+        M.debug("row value: "..muiTargetValue)
     end
 
     if event.row.miscEvent ~= nil and event.row.miscEvent.name ~= nil then
         local parentName = string.gsub(event.row.miscEvent.name, "-List", "")
 
+        if muiTargetIndex ~= nil then
+            muiData.widgetDict[parentName]["selectorfieldfake"].text =  muiData.widgetDict[parentName].list[muiTargetIndex].text -- was muiTargetValue
+        end
+        muiData.widgetDict[parentName]["value"] = muiTargetValue
+        timer.performWithDelay(500, function() M.finishSelector(parentName) end, 1)
+    else
+        local parentName = muiData.focus
+
         muiData.widgetDict[parentName]["selectorfieldfake"].text = muiTargetValue
         muiData.widgetDict[parentName]["value"] = muiTargetValue
         timer.performWithDelay(500, function() M.finishSelector(parentName) end, 1)
     end
+    muiData.touched = true
+    return true -- prevent propagation to other controls
 end
 
 function M.finishSelector(parentName)

@@ -54,6 +54,8 @@ function M.newToggleSwitch(options)
         y = options.y
     end
 
+    x, y = M.getSafeXY(options, x, y)
+
     if options.width == nil then
         options.width = options.size
     end
@@ -192,7 +194,7 @@ function M.toggleSwitchTouch (event)
         if M.isTouchPointOutOfRange( event ) then
             event.phase = "offTarget"
             -- event.target:dispatchEvent(event)
-            -- print("Its out of the button area")
+            -- M.debug("Its out of the button area")
         else
           event.phase = "onTarget"
             if muiData.interceptMoved == false then
@@ -217,6 +219,8 @@ function M.toggleSwitchTouch (event)
             muiData.touching = false
         end
     end
+    muiData.touched = true
+    return true -- prevent propagation to other controls
 end
 
 function M.flipSwitch(widgetName, delay)
@@ -260,14 +264,14 @@ function M.actionForSwitch(event)
     local muiTargetChecked = M.getEventParameter(event, "muiTargetChecked")
 
     if muiTargetValue ~= nil then
-        print("toggle switch value: " .. muiTargetValue)
+        M.debug("toggle switch value: " .. muiTargetValue)
     end
 
     if muiTargetChecked == nil then muiTargetChecked = false end
     if muiTargetChecked == true then
-        print("toggle switch on")
+        M.debug("toggle switch on")
     else
-        print("toggle switch off")
+        M.debug("toggle switch off")
     end
 end
 
